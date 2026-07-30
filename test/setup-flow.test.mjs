@@ -78,7 +78,6 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
     arguments: {
       app_name: 'Example',
       bundle_id: 'com.example.app',
-      use_cases: ['regular_feedback'],
       subscription_provider: 'none',
     },
   }));
@@ -86,8 +85,11 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   assert.equal(begin.status, 'authorization_required');
   assert.equal(begin.session_id, 'setup-session');
   assert.match(begin.authorization_url, /^https:\/\/www\.paydirt\.ai\/setup\?/);
+  const authorizationUrl = new URL(begin.authorization_url);
+  assert.equal(authorizationUrl.searchParams.get('required_forms'), 'custom,trial_expiration,cancellation');
   assert.equal(begin.finish_arguments.session_id, 'setup-session');
   assert.equal(begin.finish_arguments.bundle_id, 'com.example.app');
+  assert.deepEqual(begin.finish_arguments.use_cases, undefined);
 
   const pending = toolJson(await client.request('tools/call', {
     name: 'paydirt_finish_setup',
@@ -102,6 +104,23 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   assert.equal(ready.status, 'ready');
   assert.equal(ready.installation.app_id, 'app-123');
   assert.equal(ready.installation.ios.subscription.provider, 'none');
+  assert.deepEqual(ready.installation.use_cases, ['regular_feedback', 'trial_cancellation', 'subscription_cancellation']);
+  assert.match(ready.installation.ios.regular_feedback_trigger, /feedback-123/);
+  assert.match(ready.installation.host_app_preservation.existing_feedback_ui, /Do not replace/);
+  assert.ok(ready.installation.agent_actions.some((action) => action.includes('preserving all existing feedback behavior')));
+
+  const explicitFeedback = toolJson(await client.request('tools/call', {
+    name: 'paydirt_begin_setup',
+    arguments: {
+      app_name: 'Example',
+      bundle_id: 'com.example.app',
+      use_cases: ['regular_feedback'],
+      subscription_provider: 'none',
+    },
+  }));
+  const explicitFeedbackUrl = new URL(explicitFeedback.authorization_url);
+  assert.equal(explicitFeedbackUrl.searchParams.get('required_forms'), 'custom');
+  assert.deepEqual(explicitFeedback.finish_arguments.use_cases, ['regular_feedback']);
 
   const credentialPath = join(fakeHome, '.paydirt', 'credentials.json');
   const credentials = JSON.parse(await readFile(credentialPath, 'utf8'));

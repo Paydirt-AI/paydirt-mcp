@@ -1,6 +1,6 @@
 {
   "name": "paydirt-mcp",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "mcpName": "io.github.Paydirt-AI/paydirt-mcp",
   "description": "Agent-native installer and control plane for Paydirt iOS feedback",
   "main": "dist/index.js",

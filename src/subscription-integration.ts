@@ -75,19 +75,31 @@ export function subscriptionIntegrationContract(input: SubscriptionIntegrationIn
       return {
         provider: 'revenuecat',
         automatic_detection: true,
+        minimum_revenuecat_version: null,
+        upgrade_required: false,
+        version_policy: 'use_host_installed_version',
         adapter_source_url: `${adapterBase}/PaydirtRevenueCatAdapter.swift`,
         setup_code: `PaydirtRevenueCatAdapter.shared.start(\n    ${forms}\n)`,
+        compatibility_fallback: {
+          strategy: 'adapt_to_host_revenuecat_api',
+          rule: 'If the template references RevenueCat APIs that are newer than the installed version, adapt the copied source to the symbols available in that installed package or call Paydirt.handleSubscriptionCancellation from the app\'s existing RevenueCat customer-info/cancellation path.',
+          optional_metadata: 'Omit unavailable price, period, store, ownership, or unsubscribe-date fields. Missing optional metadata must not block the trial or subscription cancellation conversation.',
+        },
         instructions: [
           'Keep the host app\'s existing RevenueCat package and version; Paydirt itself does not depend on RevenueCat.',
+          'An older RevenueCat version is not a blocker and must not be upgraded solely for Paydirt.',
+          'Inspect the installed RevenueCat source and the host app\'s existing customer-info, purchaser-info, delegate, or cancellation code. Adapt the copied adapter to the API names and callback style that already compile in this app.',
           'Copy PaydirtRevenueCatAdapter.swift into the host target and start it after Purchases and Paydirt are configured.',
           'The adapter preserves and forwards to the existing Purchases delegate.',
+          'If the installed version lacks newer product or metadata APIs, omit those optional fields and keep cancellation detection working from the renewal state the app already reads.',
+          'If adapting the delegate is unsafe, call Paydirt.handleSubscriptionCancellation from the app\'s existing confirmed RevenueCat cancellation/customer-info path instead. Do not replace the purchase flow or switch providers because the SDK is old.',
         ],
       };
     case 'superwall':
       return {
         provider: 'superwall',
         automatic_detection: true,
-        minimum_superwall_version: '4.10.0',
+        minimum_superwall_version: '4.11.0',
         adapter_source_url: `${adapterBase}/PaydirtSuperwallAdapter.swift`,
         setup_code: `PaydirtSuperwallAdapter.shared.start(\n    ${forms}\n)`,
         instructions: [

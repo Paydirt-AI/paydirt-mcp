@@ -18,7 +18,7 @@ codex mcp add paydirt -- npx -y paydirt-mcp@latest
 
 Restart Codex after adding the server. Then ask:
 
-> Install Paydirt in this iOS app for regular feedback, trial cancellation, and subscription cancellation. Detect the subscription provider, connect every form to my Slack feedback channel, edit the app, build it, and give me an exact test path.
+> Install Paydirt in this iOS app for regular feedback, trial cancellation, and subscription cancellation. Detect the existing subscription setup, preserve any existing feedback form and its behavior, connect every Paydirt form to my Slack feedback channel, edit the app, build it, and give me an exact test path.
 
 To remove the server later:
 
@@ -89,7 +89,18 @@ The agent inspects the app before setup and selects the existing subscription so
 - App-owned billing emits Paydirt's provider-independent cancellation event.
 - Apps without subscriptions can install manual feedback alone.
 
-If cancellation automation is blocked, the agent must still finish and build manual feedback and explain only the narrow provider blocker.
+The agent must preserve all existing host-app feedback forms, buttons, screens,
+handlers, destinations, and side effects. It may only add or change regular
+feedback when the user explicitly requests that exact placement. If a requested
+cancellation bridge is blocked, the agent reports the narrow provider blocker,
+preserves the existing app behavior, and completes every unaffected requested
+form.
+
+An older RevenueCat version is not a blocker. The agent keeps the installed
+version and adapts the copied source adapter to the customer-info or
+purchaser-info API already compiling in the app. Newer optional metadata may be
+omitted, or Paydirt can be called from the app's existing confirmed RevenueCat
+cancellation path.
 
 ### Deliver to Slack and coding agents
 

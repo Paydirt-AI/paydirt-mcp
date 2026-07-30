@@ -38,6 +38,8 @@ test('returns an exact, escaped Swift statement and mandatory verification actio
     'Paydirt.presentForm(formId: "form-123", metadata: ["paydirt_placement": "after saving a \\"favorite\\""])'
   );
   assert.match(contract.ios.placement_instruction, /successful completion path/);
+  assert.match(contract.ios.note, /Preserve the existing host-app form/);
+  assert.ok(contract.agent_actions.some((action) => action.includes('Do not replace')));
   assert.equal(contract.completion_requirements.host_app_build_passed, true);
   assert.equal(contract.completion_requirements.slack_channel_assigned, true);
 });

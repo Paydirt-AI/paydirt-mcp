@@ -2,6 +2,13 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.1.2 - 2026-07-30
+
+- Preserve existing host-app feedback behavior while installing requested forms.
+- Connect cancellation forms to the StoreKit, RevenueCat, Superwall, or app-owned subscription code already working in the app.
+- Adapt small host-source bridges to installed provider APIs and omit unavailable optional metadata rather than blocking installation.
+- Clarify Superwall CustomerInfo bridge compatibility and strengthen placement, setup, and distribution tests.
+
 ## 2.1.1 - 2026-07-30
 
 - Add official MCP Registry ownership and package metadata.

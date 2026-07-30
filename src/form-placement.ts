@@ -73,11 +73,12 @@ export function feedbackPlacementContract(
       required_import: 'import Paydirt',
       presentation_statement: presentationStatement,
       placement_instruction: triggerInstruction(trigger, placement),
-      note: 'Use the exact form ID. Adapt only the surrounding host-app control flow and pass a real userId if the app has one.',
+      note: 'Use the exact form ID. Preserve the existing host-app form, UI, handler, destination, and side effects; add this presentation only at the explicitly requested placement. Adapt only the surrounding control flow and pass a real userId if the app has one.',
     },
     slack,
     agent_actions: [
       `Find the host-app source that implements this exact requested placement/action: ${placement}`,
+      'Preserve every existing host-app feedback form, button, screen, handler, destination, and side effect. Do not replace, remove, repurpose, or reroute existing feedback behavior.',
       'Ensure Paydirt is installed and configured. If it is not, use paydirt_begin_setup and paydirt_finish_setup, then perform every returned installation action first.',
       `Edit the host app so this exact statement runs at the requested trigger: ${presentationStatement}`,
       triggerInstruction(trigger, placement),

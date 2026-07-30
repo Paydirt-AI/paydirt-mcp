@@ -16,7 +16,11 @@ globalThis.fetch = async (input, options = {}) => {
           api_key: 'public-sdk-key',
           app_id: 'app-123',
           action: 'created',
-          forms: [{ id: 'feedback-123', type: 'custom', name: 'Feedback', created: true }],
+          forms: [
+            { id: 'feedback-123', type: 'custom', name: 'Feedback', created: true },
+            { id: 'subscription-123', type: 'cancellation', name: 'Cancellation Feedback', created: true },
+            { id: 'trial-123', type: 'trial_expiration', name: 'Trial Cancellation Feedback', created: true },
+          ],
         };
   } else {
     return new Response(JSON.stringify({ error: 'not found' }), {
