@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "paydirt": {
+      "type": "http",
+      "url": "https://mcp.paydirt.ai/mcp"
+    }
+  }
+}

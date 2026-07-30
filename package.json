@@ -1,6 +1,7 @@
 {
   "name": "paydirt-mcp",
-  "version": "2.1.0",
+  "version": "2.1.1",
+  "mcpName": "io.github.Paydirt-AI/paydirt-mcp",
   "description": "Agent-native installer and control plane for Paydirt iOS feedback",
   "main": "dist/index.js",
   "type": "module",
@@ -12,12 +13,14 @@
   },
   "files": [
     "dist",
+    ".mcp/server.json",
     "CHANGELOG.md",
     "SECURITY.md"
   ],
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test test/*.test.mjs",
+    "test": "npm run build && node --test test/*.test.mjs && npm run validate:distribution",
+    "validate:distribution": "node scripts/validate-distribution.mjs",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "prepublishOnly": "npm run build"

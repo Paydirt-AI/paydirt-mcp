@@ -175,7 +175,7 @@ function getAuthToken(): string {
 const server = new Server(
   {
     name: 'paydirt-mcp-server',
-    version: '2.1.0',
+    version: '2.1.1',
   },
   {
     capabilities: {
@@ -333,10 +333,10 @@ async function finishSetup(
 }
 
 // Tool definitions
-const tools = [
+const toolDefinitions = [
   {
     name: 'paydirt_setup',
-    description: 'Compatibility setup entry point. It never opens a browser or blocks: without session_id it starts setup and immediately returns authorization_url plus finish arguments; with session_id it checks once and returns pending, expired, or the complete installation contract. New agents should use paydirt_begin_setup and paydirt_finish_setup explicitly.',
+    description: 'Use this when an older client expects the single setup tool. Without session_id it starts setup and immediately returns authorization_url plus finish arguments; with session_id it checks once and returns pending, expired, or the complete installation contract. It never opens a browser or blocks. New agents should prefer paydirt_begin_setup and paydirt_finish_setup.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -351,7 +351,7 @@ const tools = [
   },
   {
     name: 'paydirt_begin_setup',
-    description: 'ALWAYS begin here when installing Paydirt for a new user or machine. Inspect the iOS host first and pass its app identity, use cases, and subscription provider. Returns authorization_url, session_id, and exact finish_arguments immediately. It is safe for headless and remote agents: it never launches a browser, sleeps, or polls.',
+    description: 'Use this when installing Paydirt for a new user, machine, or iOS app and authentication has not been completed. Inspect the host first and pass its app identity, use cases, and subscription provider. Returns authorization_url, session_id, and exact finish_arguments immediately; it never launches a browser, sleeps, or polls.',
     inputSchema: {
       type: 'object' as const,
       properties: setupInputProperties,
@@ -360,7 +360,7 @@ const tools = [
   },
   {
     name: 'paydirt_finish_setup',
-    description: 'Check one setup session after the user opens authorization_url. Returns immediately. If pending, do not loop or sleep; let the user finish authorization and call again. When ready, securely saves credentials and returns the complete host-app installation, Slack, build, and verification contract.',
+    description: 'Use this when the user has opened the authorization URL returned by paydirt_begin_setup. Checks one setup session and returns immediately. If pending, do not loop or sleep. When ready, securely saves credentials and returns the complete host-app installation, Slack, build, and verification contract.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -375,7 +375,7 @@ const tools = [
   },
   {
     name: 'paydirt_list_apps',
-    description: 'List all Paydirt apps for the authenticated user. Use this after setup or when the user asks which Paydirt apps they have.',
+    description: 'Use this when the user asks which Paydirt apps exist or when an agent must resolve an app ID after setup. Lists all apps for the authenticated Paydirt account without changing them.',
     inputSchema: {
       type: 'object' as const,
       properties: {},
@@ -384,7 +384,7 @@ const tools = [
   },
   {
     name: 'paydirt_create_app',
-    description: 'Create a new Paydirt app',
+    description: 'Use this when the user explicitly needs a separate Paydirt app and setup cannot reuse or create it. Creates a new app; list existing apps first when duplication is possible.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -406,7 +406,7 @@ const tools = [
   },
   {
     name: 'paydirt_get_app',
-    description: 'Get details of a specific Paydirt app',
+    description: 'Use this when the agent needs the current identity, bundle ID, SDK key, or configuration for one known Paydirt app. Does not modify the app.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -420,7 +420,7 @@ const tools = [
   },
   {
     name: 'paydirt_list_forms',
-    description: 'List all forms for a Paydirt app. Use this when the user asks to see what forms exist for an app after setup.',
+    description: 'Use this when the user asks which forms exist or the agent needs to resolve or deduplicate forms for a Paydirt app. Does not modify forms.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -434,7 +434,7 @@ const tools = [
   },
   {
     name: 'paydirt_create_form',
-    description: 'Create one remote Paydirt form only when a matching form does not already exist. Map subscription cancellation to cancellation, trial cancellation to trial_expiration, and regular feedback to custom. After creation, wire the returned form ID into the iOS app and assign its Slack channel.',
+    description: 'Use this when creating a low-level remote form without a host-app placement request. First confirm a matching form does not exist. Map subscription cancellation to cancellation, trial cancellation to trial_expiration, and regular feedback to custom; then wire the returned ID into iOS and assign Slack. Prefer paydirt_add_feedback_form for named screen or action placement.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -465,7 +465,7 @@ const tools = [
   },
   {
     name: 'paydirt_add_feedback_form',
-    description: 'Create or reuse a named custom feedback form and return the mandatory host-app placement contract. ALWAYS use this when the user says “add a feedback form titled/name X at/on/after Y”, requests a form on a screen or button, or wants feedback triggered by an in-app action. It matches existing custom forms by normalized title so retries do not create duplicates, carries the requested placement verbatim, optionally resolves and assigns Slack, and returns the exact Swift presentation statement. After it returns, edit the host app at that placement, build it, and verify Slack; remote form creation alone is not completion.',
+    description: 'Use this when the user asks for a named feedback form at a screen, button, lifecycle moment, or in-app action. Creates or reuses a normalized-title match, preserves the placement verbatim, optionally resolves Slack, and returns exact Swift plus mandatory edit/build/test actions. Remote form creation alone is not completion.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -504,7 +504,7 @@ const tools = [
   },
   {
     name: 'paydirt_get_responses',
-    description: 'Read raw Paydirt conversations without taking action. Returns stable response IDs, Q/A messages, text-or-audio input type, provider-independent subscription metadata, status, and the optional summary. Defaults to completed conversations. Use since plus the newest updated_at as a read-only Codex or coding-agent inbox cursor.',
+    description: 'Use this when the user or coding agent needs raw feedback conversations, exact Q/A turns, input type, subscription metadata, or a read-only inbox cursor. Defaults to completed conversations. Use since plus the newest updated_at for incremental reads; never take action from responses automatically.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -537,7 +537,7 @@ const tools = [
   },
   {
     name: 'paydirt_get_summary',
-    description: 'Get AI-generated summary of responses for a Paydirt app',
+    description: 'Use this when the user asks for an aggregate AI summary of recent Paydirt responses. Raw questions and answers remain the source of truth; this read-only summary is supplementary.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -559,7 +559,7 @@ const tools = [
   },
   {
     name: 'paydirt_connect_slack',
-    description: 'Connect Slack for a Paydirt app. Use this when the user asks to connect Slack or send Paydirt responses into a Slack channel.',
+    description: 'Use this when the user asks to connect Slack or route Paydirt responses to Slack. Returns the Slack authorization URL; the user completes authorization in the browser.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -573,7 +573,7 @@ const tools = [
   },
   {
     name: 'paydirt_list_slack_channels',
-    description: 'List available Slack channels for a connected workspace',
+    description: 'Use this when Slack is connected and the agent must resolve a requested channel name to its channel ID. Lists available channels without changing assignments.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -587,7 +587,7 @@ const tools = [
   },
   {
     name: 'paydirt_set_form_channel',
-    description: 'Set the Slack channel for a form to post responses to',
+    description: 'Use this when a form must deliver completed conversations to a specific Slack channel ID. Replaces that form’s current channel assignment and should be verified afterward.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -609,7 +609,7 @@ const tools = [
   },
   {
     name: 'paydirt_update_form',
-    description: 'Update an existing form (name, prompt, or custom system prompt)',
+    description: 'Use this when the user asks to change an existing form’s name, initial question, or AI follow-up guidance. Only supplied fields are updated.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -636,7 +636,7 @@ const tools = [
   // New tools
   {
     name: 'paydirt_health_check',
-    description: 'Verify Paydirt API connectivity and authentication status',
+    description: 'Use this when diagnosing whether the Paydirt API is reachable and stored authentication is valid. Performs a read-only connectivity check.',
     inputSchema: {
       type: 'object' as const,
       properties: {},
@@ -645,7 +645,7 @@ const tools = [
   },
   {
     name: 'paydirt_update_app',
-    description: 'Update app settings (name, description, system prompts)',
+    description: 'Use this when the user asks to change an existing Paydirt app’s identity, bundle ID, description, or AI context. Only supplied fields are updated.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -679,7 +679,7 @@ const tools = [
   },
   {
     name: 'paydirt_get_form',
-    description: 'Get details of a specific form including enabled status',
+    description: 'Use this when the agent needs the current prompt, type, enabled state, or Slack assignment for one known form. Does not modify the form.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -693,7 +693,7 @@ const tools = [
   },
   {
     name: 'paydirt_delete_form',
-    description: 'Delete a form permanently',
+    description: 'Use this when the user explicitly asks to permanently delete a specific Paydirt form. This is destructive and should only be called after inspecting the form when its identity is uncertain.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -707,7 +707,7 @@ const tools = [
   },
   {
     name: 'paydirt_slack_status',
-    description: 'Check Slack connection status for an app',
+    description: 'Use this when the agent needs to verify whether Slack is connected for a Paydirt app before listing channels or declaring setup complete.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -721,7 +721,7 @@ const tools = [
   },
   {
     name: 'paydirt_toggle_form',
-    description: 'Enable or disable a form remotely. Disabled forms will not be shown to users in the SDK.',
+    description: 'Use this when the user asks to enable or disable an existing form remotely. Disabled forms are not shown by the SDK; calling again with the opposite value reverses the change.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -739,7 +739,7 @@ const tools = [
   },
   {
     name: 'paydirt_ask',
-    description: 'Ask a natural language question about your feedback data. The AI will analyze responses and provide insights based on actual user feedback.',
+    description: 'Use this when the user asks a natural-language analytical question about their Paydirt feedback, such as pricing themes or feature requests. Reads actual responses and returns analysis without taking action.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -765,6 +765,221 @@ const tools = [
   },
 ];
 
+interface PaydirtToolAnnotations {
+  title: string;
+  readOnlyHint: boolean;
+  destructiveHint: boolean;
+  idempotentHint: boolean;
+  openWorldHint: boolean;
+}
+
+const toolAnnotations: Record<string, PaydirtToolAnnotations> = {
+  paydirt_setup: {
+    title: 'Set Up Paydirt (Compatibility)', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true,
+  },
+  paydirt_begin_setup: {
+    title: 'Begin Paydirt Setup', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true,
+  },
+  paydirt_finish_setup: {
+    title: 'Finish Paydirt Setup', readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_list_apps: {
+    title: 'List Paydirt Apps', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_create_app: {
+    title: 'Create Paydirt App', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true,
+  },
+  paydirt_get_app: {
+    title: 'Get Paydirt App', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_list_forms: {
+    title: 'List Feedback Forms', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_create_form: {
+    title: 'Create Feedback Form', readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true,
+  },
+  paydirt_add_feedback_form: {
+    title: 'Add Form at App Placement', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_get_responses: {
+    title: 'Get Raw Feedback Responses', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_get_summary: {
+    title: 'Summarize Feedback', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_connect_slack: {
+    title: 'Connect Slack', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_list_slack_channels: {
+    title: 'List Slack Channels', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_set_form_channel: {
+    title: 'Assign Form to Slack Channel', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_update_form: {
+    title: 'Update Feedback Form', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_health_check: {
+    title: 'Check Paydirt Health', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_update_app: {
+    title: 'Update Paydirt App', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_get_form: {
+    title: 'Get Feedback Form', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_delete_form: {
+    title: 'Delete Feedback Form', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_slack_status: {
+    title: 'Check Slack Connection', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_toggle_form: {
+    title: 'Enable or Disable Form', readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_ask: {
+    title: 'Ask About Feedback', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+};
+
+const setupOutputSchema = {
+  type: 'object' as const,
+  properties: {
+    success: { type: 'boolean' },
+    status: { type: 'string' },
+    message: { type: 'string' },
+  },
+  required: ['success', 'status'],
+};
+
+const appOutputSchema = {
+  type: 'object' as const,
+  properties: {
+    id: { type: 'string' },
+    name: { type: 'string' },
+    bundle_id: { type: ['string', 'null'] },
+    api_key: { type: 'string' },
+  },
+  required: ['id', 'name', 'api_key'],
+};
+
+const formProperties = {
+  id: { type: 'string' },
+  app_id: { type: 'string' },
+  name: { type: 'string' },
+  type: { type: 'string' },
+  prompt: { type: 'string' },
+  slack_channel_id: { type: ['string', 'null'] },
+  enabled: { type: 'boolean' },
+};
+
+const directFormOutputSchema = {
+  type: 'object' as const,
+  properties: formProperties,
+  required: ['id', 'app_id', 'name', 'type', 'prompt'],
+};
+
+const wrappedFormOutputSchema = {
+  type: 'object' as const,
+  properties: {
+    form: directFormOutputSchema,
+  },
+  required: ['form'],
+};
+
+const toolOutputSchemas: Record<string, { type: 'object'; properties?: Record<string, object>; required?: string[] }> = {
+  paydirt_setup: setupOutputSchema,
+  paydirt_begin_setup: setupOutputSchema,
+  paydirt_finish_setup: setupOutputSchema,
+  paydirt_create_app: appOutputSchema,
+  paydirt_get_app: appOutputSchema,
+  paydirt_create_form: directFormOutputSchema,
+  paydirt_add_feedback_form: {
+    type: 'object',
+    properties: {
+      success: { type: 'boolean' },
+      form_action: { type: 'string', enum: ['created', 'reused', 'reused_and_updated'] },
+      form: { type: 'object' },
+      requested_placement: { type: 'object' },
+      ios: { type: 'object' },
+      slack: { type: 'object' },
+      agent_actions: { type: 'array', items: { type: 'string' } },
+      completion_requirements: { type: 'object' },
+    },
+    required: ['success', 'form_action', 'form', 'requested_placement', 'ios', 'slack', 'agent_actions', 'completion_requirements'],
+  },
+  paydirt_get_summary: {
+    type: 'object',
+    properties: {
+      summary: { type: 'string' },
+      top_reasons: { type: 'array', items: { type: 'string' } },
+      response_count: { type: 'number' },
+      period: { type: 'string' },
+    },
+    required: ['summary', 'top_reasons', 'response_count', 'period'],
+  },
+  paydirt_connect_slack: {
+    type: 'object', properties: { auth_url: { type: 'string' } }, required: ['auth_url'],
+  },
+  paydirt_list_slack_channels: {
+    type: 'object',
+    properties: {
+      channels: { type: 'array', items: { type: 'object' } },
+      team_name: { type: 'string' },
+    },
+    required: ['channels', 'team_name'],
+  },
+  paydirt_set_form_channel: wrappedFormOutputSchema,
+  paydirt_update_form: wrappedFormOutputSchema,
+  paydirt_health_check: {
+    type: 'object',
+    properties: { status: { type: 'string' }, authenticated: { type: 'boolean' } },
+    required: ['status', 'authenticated'],
+  },
+  paydirt_update_app: appOutputSchema,
+  paydirt_get_form: wrappedFormOutputSchema,
+  paydirt_delete_form: {
+    type: 'object', properties: { success: { type: 'boolean' } }, required: ['success'],
+  },
+  paydirt_slack_status: {
+    type: 'object',
+    properties: { connected: { type: 'boolean' }, team_name: { type: ['string', 'null'] } },
+    required: ['connected', 'team_name'],
+  },
+  paydirt_toggle_form: wrappedFormOutputSchema,
+  paydirt_ask: {
+    type: 'object',
+    properties: {
+      answer: { type: 'string' }, response_count: { type: 'number' }, days: { type: 'number' },
+    },
+    required: ['answer', 'response_count', 'days'],
+  },
+};
+
+const tools = toolDefinitions.map((tool) => {
+  const annotations = toolAnnotations[tool.name];
+  if (!annotations) throw new Error(`Missing MCP annotations for ${tool.name}`);
+  const outputSchema = toolOutputSchemas[tool.name];
+  return {
+    ...tool,
+    annotations,
+    ...(outputSchema ? { outputSchema } : {}),
+  };
+});
+
+function successfulToolResult(name: string, result: unknown) {
+  const content = [
+    {
+      type: 'text' as const,
+      text: JSON.stringify(result, null, 2),
+    },
+  ];
+  if (toolOutputSchemas[name] && result !== null && typeof result === 'object' && !Array.isArray(result)) {
+    return { content, structuredContent: result as Record<string, unknown> };
+  }
+  return { content };
+}
+
 // Handle list tools request
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools };
@@ -781,24 +996,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const result = name === 'paydirt_finish_setup' || sessionId
         ? await finishSetup(sessionId, args)
         : await beginSetup(args);
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+      return successfulToolResult(name, result);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: JSON.stringify({ success: false, status: 'error', message: `Setup error: ${errorMessage}` }, null, 2),
-          },
-        ],
-      };
+      return successfulToolResult(name, {
+        success: false,
+        status: 'error',
+        message: `Setup error: ${errorMessage}`,
+      });
     }
   }
 
@@ -1067,14 +1272,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
     }
 
-    return {
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(result, null, 2),
-        },
-      ],
-    };
+    return successfulToolResult(name, result);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return {

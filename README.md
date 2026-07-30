@@ -4,6 +4,8 @@
 [![npm](https://img.shields.io/npm/v/paydirt-mcp)](https://www.npmjs.com/package/paydirt-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+MCP Registry name: `io.github.Paydirt-AI/paydirt-mcp`
+
 The agent-native installer and control plane for [Paydirt](https://www.paydirt.ai), an iOS SDK for regular feedback, trial cancellation, and subscription cancellation.
 
 Paydirt MCP lets a coding agent create forms, place them in an iOS app, connect Slack, build the host app, and read raw feedback. Paydirt supports native StoreKit, RevenueCat, Superwall, app-owned billing, and apps without subscriptions.
@@ -29,6 +31,15 @@ codex mcp remove paydirt
 ```bash
 claude mcp add paydirt -- npx -y paydirt-mcp@latest
 ```
+
+The public Paydirt Claude plugin marketplace is also included in this repository. After the public repository is available:
+
+```text
+/plugin marketplace add Paydirt-AI/paydirt-mcp
+/plugin install paydirt@paydirt-plugins
+```
+
+The plugin bundles both the Paydirt installation workflow and the pinned MCP server configuration.
 
 Other MCP hosts can launch the same stdio command:
 
@@ -108,6 +119,8 @@ npm pack --dry-run
 ```
 
 The repository intentionally contains only the public MCP client. Paydirt's API, dashboard, infrastructure, and operational configuration remain private.
+
+Official MCP Registry metadata lives at [`.mcp/server.json`](.mcp/server.json). It describes the current npm stdio package; Paydirt does not claim a remote MCP transport until a public HTTPS endpoint is deployed and verified.
 
 See [SUPPORT.md](SUPPORT.md) for support, [SECURITY.md](SECURITY.md) before reporting a vulnerability, and [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 

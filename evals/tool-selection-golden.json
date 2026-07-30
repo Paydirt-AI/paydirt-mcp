@@ -1,0 +1,201 @@
+{
+  "version": 1,
+  "purpose": "Golden routing prompts for Paydirt MCP tool discovery and argument extraction.",
+  "cases": [
+    {
+      "id": "direct-install",
+      "category": "direct",
+      "prompt": "Install Paydirt in this iOS app for feedback and cancellation research.",
+      "expected_tools": ["paydirt_begin_setup"]
+    },
+    {
+      "id": "direct-finish-auth",
+      "category": "direct",
+      "prompt": "I authorized Paydirt in the browser. Continue the setup.",
+      "expected_tools": ["paydirt_finish_setup"]
+    },
+    {
+      "id": "direct-list-apps",
+      "category": "direct",
+      "prompt": "Show me every app in my Paydirt account.",
+      "expected_tools": ["paydirt_list_apps"]
+    },
+    {
+      "id": "direct-list-forms",
+      "category": "direct",
+      "prompt": "What Paydirt feedback forms already exist for this app?",
+      "expected_tools": ["paydirt_list_forms"]
+    },
+    {
+      "id": "direct-connect-slack",
+      "category": "direct",
+      "prompt": "Connect this Paydirt app to Slack.",
+      "expected_tools": ["paydirt_connect_slack"]
+    },
+    {
+      "id": "direct-raw-responses",
+      "category": "direct",
+      "prompt": "Get the exact raw questions and answers from completed feedback responses.",
+      "expected_tools": ["paydirt_get_responses"]
+    },
+    {
+      "id": "direct-summary",
+      "category": "direct",
+      "prompt": "Summarize the last seven days of Paydirt feedback.",
+      "expected_tools": ["paydirt_get_summary"]
+    },
+    {
+      "id": "direct-delete",
+      "category": "direct",
+      "prompt": "Permanently delete the old Paydirt form with ID form_old after confirming it is the right one.",
+      "expected_tools": ["paydirt_get_form", "paydirt_delete_form"]
+    },
+    {
+      "id": "indirect-understand-churn",
+      "category": "indirect",
+      "prompt": "We have no idea why iPhone subscribers leave. Add something conversational so they can tell us in their own words.",
+      "expected_tools": ["paydirt_begin_setup"]
+    },
+    {
+      "id": "indirect-feedback-inbox",
+      "category": "indirect",
+      "prompt": "Treat new customer feedback like a read-only inbox and show me anything received since yesterday.",
+      "expected_tools": ["paydirt_get_responses"]
+    },
+    {
+      "id": "indirect-pricing-analysis",
+      "category": "indirect",
+      "prompt": "What are customers actually saying about our price?",
+      "expected_tools": ["paydirt_ask"]
+    },
+    {
+      "id": "placement-settings-button",
+      "category": "placement",
+      "prompt": "Add a feedback form titled Product Feedback in Settings directly below Restore Purchases.",
+      "expected_tools": ["paydirt_add_feedback_form"],
+      "expected_arguments": {
+        "title": "Product Feedback",
+        "trigger": "user_tap",
+        "placement_contains": "Settings"
+      }
+    },
+    {
+      "id": "placement-success-action",
+      "category": "placement",
+      "prompt": "After an export succeeds, show a form named Export Feedback and send it to #product-feedback.",
+      "expected_tools": ["paydirt_add_feedback_form"],
+      "expected_arguments": {
+        "title": "Export Feedback",
+        "trigger": "in_app_action",
+        "slack_channel": "product-feedback"
+      }
+    },
+    {
+      "id": "placement-screen-appearance",
+      "category": "placement",
+      "prompt": "Show a feedback form titled Workout Reflection when the workout summary screen appears.",
+      "expected_tools": ["paydirt_add_feedback_form"],
+      "expected_arguments": {
+        "title": "Workout Reflection",
+        "trigger": "screen_appearance"
+      }
+    },
+    {
+      "id": "placement-custom-condition",
+      "category": "placement",
+      "prompt": "Add a form called Power User Check-in after someone completes their tenth project.",
+      "expected_tools": ["paydirt_add_feedback_form"],
+      "expected_arguments": {
+        "title": "Power User Check-in",
+        "trigger": "custom_condition"
+      }
+    },
+    {
+      "id": "provider-revenuecat",
+      "category": "provider-specific",
+      "provider": "revenuecat",
+      "prompt": "Install trial and paid cancellation feedback. This app already uses RevenueCat.",
+      "expected_tools": ["paydirt_begin_setup"],
+      "expected_arguments": {
+        "subscription_provider": "revenuecat"
+      }
+    },
+    {
+      "id": "provider-storekit",
+      "category": "provider-specific",
+      "provider": "storekit",
+      "prompt": "This app uses native StoreKit 2 with pro.monthly and pro.yearly. Add trial and subscription cancellation feedback.",
+      "expected_tools": ["paydirt_begin_setup"],
+      "expected_arguments": {
+        "subscription_provider": "storekit",
+        "subscription_product_ids": ["pro.monthly", "pro.yearly"]
+      }
+    },
+    {
+      "id": "provider-superwall",
+      "category": "provider-specific",
+      "provider": "superwall",
+      "prompt": "Our paywalls and subscription events come from Superwall. Install Paydirt cancellation feedback.",
+      "expected_tools": ["paydirt_begin_setup"],
+      "expected_arguments": {
+        "subscription_provider": "superwall"
+      }
+    },
+    {
+      "id": "provider-custom",
+      "category": "provider-specific",
+      "provider": "custom",
+      "prompt": "There is no billing SDK. We own the cancellation screen like the old DifferentSDK integration. Add Paydirt there.",
+      "expected_tools": ["paydirt_begin_setup"],
+      "expected_arguments": {
+        "subscription_provider": "custom"
+      }
+    },
+    {
+      "id": "provider-none",
+      "category": "provider-specific",
+      "provider": "none",
+      "prompt": "This free iOS app has no subscriptions. Install only a regular feedback form.",
+      "expected_tools": ["paydirt_begin_setup"],
+      "expected_arguments": {
+        "subscription_provider": "none",
+        "use_cases": ["regular_feedback"]
+      }
+    },
+    {
+      "id": "negative-structured-onboarding",
+      "category": "negative",
+      "prompt": "Build a required multi-page onboarding questionnaire that writes structured profile fields into my app database.",
+      "expected_tools": [],
+      "reason": "Paydirt is optional conversational feedback, not required structured onboarding."
+    },
+    {
+      "id": "negative-automatic-refund",
+      "category": "negative",
+      "prompt": "Automatically issue refunds whenever a feedback answer mentions price.",
+      "expected_tools": [],
+      "reason": "Paydirt feedback consumers are read-only and must not take actions from responses."
+    },
+    {
+      "id": "negative-send-customer-message",
+      "category": "negative",
+      "prompt": "Reply to every unhappy user from Slack without asking me.",
+      "expected_tools": [],
+      "reason": "Paydirt does not perform autonomous outbound customer actions."
+    },
+    {
+      "id": "negative-web-survey",
+      "category": "negative",
+      "prompt": "Create a public web survey link for desktop visitors.",
+      "expected_tools": [],
+      "reason": "This MCP surface installs Paydirt’s native iOS SDK, not a general web form."
+    },
+    {
+      "id": "negative-local-delete",
+      "category": "negative",
+      "prompt": "Delete the old screenshots folder from this repository.",
+      "expected_tools": [],
+      "reason": "The request is unrelated to Paydirt resources."
+    }
+  ]
+}

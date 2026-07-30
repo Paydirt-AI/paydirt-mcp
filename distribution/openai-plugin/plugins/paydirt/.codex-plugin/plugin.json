@@ -1,0 +1,31 @@
+{
+  "name": "paydirt",
+  "version": "2.1.1",
+  "description": "Install and operate Paydirt feedback workflows in iOS apps",
+  "author": {
+    "name": "Paydirt",
+    "url": "https://www.paydirt.ai"
+  },
+  "homepage": "https://www.paydirt.ai/docs#agent-installation",
+  "repository": "https://github.com/Paydirt-AI/paydirt-mcp",
+  "license": "MIT",
+  "keywords": ["ios", "feedback", "subscriptions", "slack", "mcp"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Paydirt",
+    "shortDescription": "Install iOS feedback with Slack delivery.",
+    "longDescription": "Add regular feedback, trial cancellation, and subscription cancellation conversations to iOS apps, then deliver exact raw responses to Slack and coding agents.",
+    "developerName": "Paydirt",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://www.paydirt.ai",
+    "privacyPolicyURL": "https://www.paydirt.ai/privacy",
+    "termsOfServiceURL": "https://www.paydirt.ai/terms",
+    "defaultPrompt": [
+      "Install Paydirt in this iOS app and build it.",
+      "Add a feedback form after this in-app action.",
+      "Connect Paydirt forms to my Slack channel."
+    ],
+    "brandColor": "#0F766E"
+  }
+}

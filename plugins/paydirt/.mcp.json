@@ -1,0 +1,6 @@
+{
+  "paydirt": {
+    "command": "npx",
+    "args": ["-y", "paydirt-mcp@2.1.1"]
+  }
+}

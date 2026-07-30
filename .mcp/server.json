@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.Paydirt-AI/paydirt-mcp",
+  "title": "Paydirt",
+  "description": "Agent-native installer and control plane for Paydirt iOS feedback",
+  "repository": {
+    "url": "https://github.com/Paydirt-AI/paydirt-mcp",
+    "source": "github"
+  },
+  "version": "2.1.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "paydirt-mcp",
+      "version": "2.1.1",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
