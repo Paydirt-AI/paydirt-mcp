@@ -1,0 +1,61 @@
+{
+  "name": "paydirt-mcp",
+  "version": "2.1.0",
+  "description": "Agent-native installer and control plane for Paydirt iOS feedback",
+  "main": "dist/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "paydirt-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test test/*.test.mjs",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Paydirt-AI/paydirt-mcp.git"
+  },
+  "homepage": "https://www.paydirt.ai/docs#agent-installation",
+  "bugs": {
+    "url": "https://github.com/Paydirt-AI/paydirt-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "codex",
+    "claude-code",
+    "coding-agent",
+    "ios",
+    "revenuecat",
+    "storekit",
+    "superwall",
+    "slack",
+    "paydirt",
+    "feedback",
+    "voice",
+    "ai"
+  ],
+  "author": "Paydirt",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}
