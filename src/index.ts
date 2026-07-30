@@ -70,6 +70,24 @@ function installationContract(
   const trialId = byType.get('trial_expiration')?.id;
   const feedbackId = byType.get('custom')?.id;
   const prefetchIds = [cancellationId, trialId, feedbackId].filter(Boolean) as string[];
+  const installTestForm = byType.get('custom') ?? byType.get('trial_expiration') ?? byType.get('cancellation') ?? forms[0];
+  const installTestPresentation = installTestForm
+    ? `Paydirt.presentForm(formId: "${installTestForm.id}", metadata: ["paydirt_install_test": true])`
+    : null;
+  const installTestKey = installTestForm
+    ? `paydirt.install-test.${appId}.${installTestForm.id}`
+    : null;
+  const installTestSnippet = installTestForm && installTestKey
+    ? `#if DEBUG
+let paydirtInstallTestKey = "${installTestKey}"
+if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
+    UserDefaults.standard.set(true, forKey: paydirtInstallTestKey)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+        ${installTestPresentation}
+    }
+}
+#endif`
+    : null;
 
   const configuration = [
     'import Paydirt',
@@ -118,6 +136,15 @@ function installationContract(
       regular_feedback_trigger: feedbackId
         ? `Paydirt.presentForm(formId: "${feedbackId}", userId: currentUserId)`
         : null,
+      install_verification: installTestForm ? {
+        required: true,
+        form_id: installTestForm.id,
+        form_name: installTestForm.name,
+        presentation: installTestPresentation,
+        app_ready_body_snippet: installTestSnippet,
+        repeat_test_reset: `UserDefaults.standard.removeObject(forKey: "${installTestKey}")`,
+        behavior: 'Add a DEBUG-only one-time app-ready trigger, build and launch the app on an available simulator or connected development device, and leave this form visibly open for the developer. Never submit it for them. Do not include the automatic trigger in release builds.',
+      } : null,
     },
     slack: {
       required_for_delivery: true,
@@ -142,8 +169,19 @@ function installationContract(
         : 'Do not create or wire regular feedback and do not modify existing feedback UI. Wire only the requested trial and/or subscription cancellation forms through the provider contract.',
       'Connect Slack, resolve the requested channel by name, and assign that channel to each form.',
       'Resolve dependencies and build the app. If provider automation cannot compile, report the exact provider blocker and preserve the existing app behavior. Do not add or replace regular feedback as a fallback unless the user explicitly requests it.',
-      'Report the files changed, build command and result, Slack assignment, enabled use cases, any narrowly deferred cancellation automation, and an exact manual test path.',
+      installTestForm
+        ? `After the build succeeds, place ios.install_verification.app_ready_body_snippet inside a safe app-ready lifecycle body. Launch the app on an available simulator or connected development device and leave the Paydirt form visibly open so the developer can answer it immediately. Do not submit the form for them, do not run this automatic trigger in release builds, and do not claim installation is complete merely because the code compiled.`
+        : 'Report that no Paydirt form was returned for immediate install verification and do not claim the form test passed.',
+      'Report the files changed, build and launch commands and results, Slack assignment, enabled use cases, the form left open for immediate verification, any narrowly deferred cancellation automation, and an exact repeatable manual test path.',
     ],
+    completion_requirements: {
+      host_app_build_passed: true,
+      host_app_launched: true,
+      install_test_form_visible: true,
+      test_form_not_submitted_by_agent: true,
+      automatic_test_trigger_debug_only: true,
+      slack_channel_assignment_verified: true,
+    },
   };
 }
 
@@ -186,7 +224,7 @@ function getAuthToken(): string {
 const server = new Server(
   {
     name: 'paydirt-mcp-server',
-    version: '2.1.2',
+    version: '2.1.3',
   },
   {
     capabilities: {

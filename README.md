@@ -8,7 +8,7 @@ MCP Registry name: `io.github.Paydirt-AI/paydirt-mcp`
 
 The agent-native installer and control plane for [Paydirt](https://www.paydirt.ai), an iOS SDK for regular feedback, trial cancellation, and subscription cancellation.
 
-Paydirt MCP lets a coding agent create forms, place them in an iOS app, connect Slack, build the host app, and read raw feedback. Paydirt supports native StoreKit, RevenueCat, Superwall, app-owned billing, and apps without subscriptions.
+Paydirt MCP lets a coding agent create forms, place them in an iOS app, connect Slack, build and launch the host app, leave a Debug-only test form open for immediate verification, and read raw feedback. Paydirt supports native StoreKit, RevenueCat, Superwall, app-owned billing, and apps without subscriptions.
 
 ## Install in Codex
 

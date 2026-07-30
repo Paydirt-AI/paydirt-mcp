@@ -2,6 +2,12 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.1.3 - 2026-07-30
+
+- Require every successful agent installation to build and launch the host app.
+- Return an exact Debug-only one-time presentation call for immediate verification.
+- Require the agent to leave the test form visibly open without submitting it for the developer.
+
 ## 2.1.2 - 2026-07-30
 
 - Preserve existing host-app feedback behavior while installing requested forms.

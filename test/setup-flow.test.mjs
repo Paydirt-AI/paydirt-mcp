@@ -106,8 +106,18 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   assert.equal(ready.installation.ios.subscription.provider, 'none');
   assert.deepEqual(ready.installation.use_cases, ['regular_feedback', 'trial_cancellation', 'subscription_cancellation']);
   assert.match(ready.installation.ios.regular_feedback_trigger, /feedback-123/);
+  assert.equal(ready.installation.ios.install_verification.form_id, 'feedback-123');
+  assert.match(ready.installation.ios.install_verification.presentation, /paydirt_install_test/);
+  assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /#if DEBUG/);
+  assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /UserDefaults/);
+  assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /feedback-123/);
+  assert.match(ready.installation.ios.install_verification.repeat_test_reset, /removeObject/);
+  assert.match(ready.installation.ios.install_verification.behavior, /DEBUG-only one-time/);
   assert.match(ready.installation.host_app_preservation.existing_feedback_ui, /Do not replace/);
   assert.ok(ready.installation.agent_actions.some((action) => action.includes('preserving all existing feedback behavior')));
+  assert.ok(ready.installation.agent_actions.some((action) => action.includes('leave the Paydirt form visibly open')));
+  assert.equal(ready.installation.completion_requirements.install_test_form_visible, true);
+  assert.equal(ready.installation.completion_requirements.automatic_test_trigger_debug_only, true);
 
   const explicitFeedback = toolJson(await client.request('tools/call', {
     name: 'paydirt_begin_setup',
