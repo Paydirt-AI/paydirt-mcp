@@ -264,8 +264,24 @@ export async function deleteForm(token: string, formId: string): Promise<{ succe
 export async function getSlackStatus(
   token: string,
   appId: string
-): Promise<{ connected: boolean; team_name: string | null }> {
-  return apiRequest<{ connected: boolean; team_name: string | null }>(
+): Promise<{
+  connected: boolean;
+  team_name: string | null;
+  default_channel_id: string | null;
+  default_channel_name: string | null;
+  form_count: number;
+  assigned_form_count: number;
+  all_forms_assigned: boolean;
+}> {
+  return apiRequest<{
+    connected: boolean;
+    team_name: string | null;
+    default_channel_id: string | null;
+    default_channel_name: string | null;
+    form_count: number;
+    assigned_form_count: number;
+    all_forms_assigned: boolean;
+  }>(
     `/api/slack/${appId}/status`,
     { token }
   );

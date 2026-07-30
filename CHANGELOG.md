@@ -2,6 +2,12 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.1.4 - 2026-07-30
+
+- Create or reuse an app-specific Slack feedback channel during OAuth by default.
+- Assign every installed form to the default Slack channel automatically.
+- Make trial and paid subscription cancellation the default cancellation pair.
+
 ## 2.1.3 - 2026-07-30
 
 - Require every successful agent installation to build and launch the host app.
