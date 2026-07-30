@@ -2,6 +2,11 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.1.5 - 2026-07-30
+
+- Create a new `#paydirt-cancellation-feedback` Slack channel by default.
+- Use a numbered channel name rather than reusing an unrelated existing channel.
+
 ## 2.1.4 - 2026-07-30
 
 - Create or reuse an app-specific Slack feedback channel during OAuth by default.

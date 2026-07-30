@@ -116,8 +116,8 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   assert.match(ready.installation.host_app_preservation.existing_feedback_ui, /Do not replace/);
   assert.ok(ready.installation.agent_actions.some((action) => action.includes('preserving all existing feedback behavior')));
   assert.ok(ready.installation.agent_actions.some((action) => action.includes('leave the Paydirt form visibly open')));
-  assert.ok(ready.installation.agent_actions.some((action) => action.includes('#<app-name>-feedback')));
-  assert.match(ready.installation.slack.default, /creates or reuses/);
+  assert.ok(ready.installation.agent_actions.some((action) => action.includes('#paydirt-cancellation-feedback')));
+  assert.match(ready.installation.slack.default, /creates a new public/);
   assert.equal(ready.installation.completion_requirements.install_test_form_visible, true);
   assert.equal(ready.installation.completion_requirements.automatic_test_trigger_debug_only, true);
 

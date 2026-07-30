@@ -149,7 +149,7 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
     slack: {
       required_for_delivery: true,
       next_tools: ['paydirt_slack_status', 'paydirt_connect_slack', 'paydirt_list_slack_channels', 'paydirt_set_form_channel'],
-      default: 'Slack OAuth creates or reuses an app-specific public channel named #<app-name>-feedback and assigns every installed form to it.',
+      default: 'Slack OAuth creates a new public #paydirt-cancellation-feedback channel and assigns every installed form to it. If that name exists, it creates the next numbered name such as #paydirt-cancellation-feedback-2.',
       rule: 'After authorization, call paydirt_slack_status and verify all_forms_assigned. Ask the user to choose a channel only when they requested a different one or their workspace blocked automatic channel creation. Do not report installation complete until assignment is verified.',
     },
     host_app_preservation: {
@@ -168,7 +168,7 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
       includesRegularFeedback
         ? 'Add regular Paydirt feedback only at the user-approved UI or lifecycle event, preserving all existing feedback behavior. Wire cancellation through the provider contract only when cancellation feedback was requested.'
         : 'Do not create or wire regular feedback and do not modify existing feedback UI. Wire only the requested trial and/or subscription cancellation forms through the provider contract.',
-      'Connect Slack. By default, let OAuth create or reuse #<app-name>-feedback and assign every installed form automatically. After authorization call paydirt_slack_status and verify all_forms_assigned. Only list channels or ask the user to choose one if they requested a different channel or their workspace blocked automatic creation.',
+      'Connect Slack. By default, let OAuth create a new #paydirt-cancellation-feedback channel (or the next numbered name when taken) and assign every installed form automatically. After authorization call paydirt_slack_status and verify all_forms_assigned. Only list channels or ask the user to choose one if they requested a different channel or their workspace blocked automatic creation.',
       'Resolve dependencies and build the app. If provider automation cannot compile, report the exact provider blocker and preserve the existing app behavior. Do not add or replace regular feedback as a fallback unless the user explicitly requests it.',
       installTestForm
         ? `After the build succeeds, place ios.install_verification.app_ready_body_snippet inside a safe app-ready lifecycle body. Launch the app on an available simulator or connected development device and leave the Paydirt form visibly open so the developer can answer it immediately. Do not submit the form for them, do not run this automatic trigger in release builds, and do not claim installation is complete merely because the code compiled.`
@@ -225,13 +225,13 @@ function getAuthToken(): string {
 const server = new Server(
   {
     name: 'paydirt-mcp-server',
-    version: '2.1.4',
+    version: '2.1.5',
   },
   {
     capabilities: {
       tools: {},
     },
-    instructions: `Paydirt is an agent-installed iOS SDK for regular feedback, named contextual forms, trial cancellation, and subscription cancellation. A generic installation includes both trial cancellation and paid subscription cancellation by default. Install the use cases the user requests, and preserve every existing host-app feedback form, button, screen, handler, and destination unless the user explicitly asks for that exact change. Inspect the iOS project first, identify whether StoreKit, RevenueCat, Superwall, or an app-owned cancellation flow already supplies subscription state when cancellation forms are requested, then authenticate with paydirt_begin_setup and paydirt_finish_setup (paydirt_setup remains a compatibility alias). Connect Paydirt to the subscription code already working in the app. Preserve the installed subscription packages and adapt the small host-source bridge to the APIs already compiling there; unavailable optional metadata must not block installation. Never wait or open a browser inside the MCP process: return the authorization URL to the user and continue only after they authorize. Perform every returned agent_action in the repository. When the user asks for a named feedback form at a screen, button, lifecycle moment, or in-app action, use paydirt_add_feedback_form and preserve their placement description and existing host behavior exactly. Create or reuse forms; never create duplicates when a matching form exists. Slack OAuth should create or reuse #<app-name>-feedback and assign every installed form automatically; ask the user to choose only when they requested a different channel or the workspace blocks channel creation. Raw questions and answers are the source of truth; AI summaries are optional. Never imply that Paydirt or another agent will take action on feedback. Do not stop at returning snippets when the user authorized installation: edit the host app at the requested placement, resolve dependencies, build, and verify the host app. If a requested subscription bridge is blocked, report the exact blocker and preserve existing app behavior while completing every unaffected requested form.`,
+    instructions: `Paydirt is an agent-installed iOS SDK for regular feedback, named contextual forms, trial cancellation, and subscription cancellation. A generic installation includes both trial cancellation and paid subscription cancellation by default. Install the use cases the user requests, and preserve every existing host-app feedback form, button, screen, handler, and destination unless the user explicitly asks for that exact change. Inspect the iOS project first, identify whether StoreKit, RevenueCat, Superwall, or an app-owned cancellation flow already supplies subscription state when cancellation forms are requested, then authenticate with paydirt_begin_setup and paydirt_finish_setup (paydirt_setup remains a compatibility alias). Connect Paydirt to the subscription code already working in the app. Preserve the installed subscription packages and adapt the small host-source bridge to the APIs already compiling there; unavailable optional metadata must not block installation. Never wait or open a browser inside the MCP process: return the authorization URL to the user and continue only after they authorize. Perform every returned agent_action in the repository. When the user asks for a named feedback form at a screen, button, lifecycle moment, or in-app action, use paydirt_add_feedback_form and preserve their placement description and existing host behavior exactly. Create or reuse forms; never create duplicates when a matching form exists. Slack OAuth should create a new #paydirt-cancellation-feedback channel, using the next numbered suffix when that name is taken, and assign every installed form automatically; ask the user to choose only when they requested a different channel or the workspace blocks channel creation. Raw questions and answers are the source of truth; AI summaries are optional. Never imply that Paydirt or another agent will take action on feedback. Do not stop at returning snippets when the user authorized installation: edit the host app at the requested placement, resolve dependencies, build, and verify the host app. If a requested subscription bridge is blocked, report the exact blocker and preserve existing app behavior while completing every unaffected requested form.`,
   }
 );
 
@@ -609,7 +609,7 @@ const toolDefinitions = [
   },
   {
     name: 'paydirt_connect_slack',
-    description: 'Use this when the user asks to connect Slack or setup requires Slack delivery. Returns the Slack OAuth URL. Authorization creates or reuses #<app-name>-feedback and assigns every installed form automatically when workspace policy allows it.',
+    description: 'Use this when the user asks to connect Slack or setup requires Slack delivery. Returns the Slack OAuth URL. Authorization creates a new #paydirt-cancellation-feedback channel (numbered when the name is taken) and assigns every installed form automatically when workspace policy allows it.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -757,7 +757,7 @@ const toolDefinitions = [
   },
   {
     name: 'paydirt_slack_status',
-    description: 'Use this when Slack authorization has finished and before declaring setup complete. Reports the default app-specific feedback channel and whether every installed form is assigned. List or select channels only when automatic creation was blocked or the user requested another channel.',
+    description: 'Use this when Slack authorization has finished and before declaring setup complete. Reports the created Paydirt cancellation feedback channel and whether every installed form is assigned. List or select channels only when automatic creation was blocked or the user requested another channel.',
     inputSchema: {
       type: 'object' as const,
       properties: {

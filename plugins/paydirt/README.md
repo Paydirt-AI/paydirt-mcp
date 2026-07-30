@@ -1,6 +1,6 @@
 # Paydirt for Claude Code
 
-This plugin bundles Paydirt's iOS installation workflow and `paydirt-mcp@2.1.4`.
+This plugin bundles Paydirt's iOS installation workflow and `paydirt-mcp@2.1.5`.
 
 From Claude Code, add the public marketplace and install the plugin:
 

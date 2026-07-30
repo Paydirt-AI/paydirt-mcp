@@ -10,7 +10,7 @@ The agent-native installer and control plane for [Paydirt](https://www.paydirt.a
 
 Paydirt MCP lets a coding agent create forms, place them in an iOS app, connect Slack, build and launch the host app, leave a Debug-only test form open for immediate verification, and read raw feedback. Paydirt supports native StoreKit, RevenueCat, Superwall, app-owned billing, and apps without subscriptions.
 
-A generic installation creates and wires both trial cancellation and paid subscription cancellation. Slack OAuth creates or reuses `#<app-name>-feedback` and assigns every installed form automatically; manual channel selection is only the fallback when requested or blocked by workspace policy.
+A generic installation creates and wires both trial cancellation and paid subscription cancellation. Slack OAuth creates a new `#paydirt-cancellation-feedback` channel and assigns every installed form automatically. If that name is taken, Paydirt creates the next numbered name; manual channel selection is only the fallback when requested or blocked by workspace policy.
 
 ## Install in Codex
 
