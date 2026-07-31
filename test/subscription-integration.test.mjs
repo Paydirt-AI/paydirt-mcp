@@ -27,8 +27,9 @@ test('returns native StoreKit code with product and form IDs', () => {
 test('keeps third-party billing packages outside the Paydirt core', () => {
   const revenueCat = subscriptionIntegrationContract({ provider: 'revenuecat' });
   const superwall = subscriptionIntegrationContract({ provider: 'superwall' });
-  assert.match(revenueCat.adapter_source_url, /PaydirtRevenueCatAdapter\.swift$/);
-  assert.match(superwall.adapter_source_url, /PaydirtSuperwallAdapter\.swift$/);
+  assert.match(revenueCat.integration_source_url, /PaydirtRevenueCatAdapter\.swift$/);
+  assert.match(superwall.integration_source_url, /PaydirtSuperwallAdapter\.swift$/);
+  assert.match(revenueCat.setup_code, /Paydirt\.enableRevenueCatIntegration/);
   assert.match(revenueCat.instructions.join(' '), /does not depend on RevenueCat/);
   assert.equal(revenueCat.minimum_revenuecat_version, null);
   assert.equal(revenueCat.upgrade_required, false);

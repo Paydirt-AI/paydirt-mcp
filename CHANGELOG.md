@@ -2,6 +2,17 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.1.6 - 2026-07-31
+
+- Combined Google and Slack authorization into the single browser setup gate.
+- Updated generated installations to Paydirt iOS 2.0.2.
+- Restored the familiar RevenueCat setup call and removed adapter terminology
+  from the developer-facing flow.
+- Made RevenueCat the automatic first choice when present and native StoreKit
+  the default for other App Store subscription apps.
+- Updated the official MCP SDK runtime and locked transitive dependencies with
+  zero production advisories.
+
 ## 2.1.5 - 2026-07-30
 
 - Create a new `#paydirt-cancellation-feedback` Slack channel by default.

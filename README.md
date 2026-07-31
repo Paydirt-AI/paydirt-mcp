@@ -10,7 +10,7 @@ The agent-native installer and control plane for [Paydirt](https://www.paydirt.a
 
 Paydirt MCP lets a coding agent create forms, place them in an iOS app, connect Slack, build and launch the host app, leave a Debug-only test form open for immediate verification, and read raw feedback. Paydirt supports native StoreKit, RevenueCat, Superwall, app-owned billing, and apps without subscriptions.
 
-A generic installation creates and wires both trial cancellation and paid subscription cancellation. Slack OAuth creates a new `#paydirt-cancellation-feedback` channel and assigns every installed form automatically. If that name is taken, Paydirt creates the next numbered name; manual channel selection is only the fallback when requested or blocked by workspace policy.
+A generic installation creates regular feedback plus both trial and paid subscription cancellation. The single browser setup handles Google sign-in and Slack OAuth, creates a new `#paydirt-cancellation-feedback` channel, and assigns every installed form before installation begins. If that name is taken, Paydirt creates the next numbered name.
 
 ## Install in Codex
 
@@ -63,7 +63,7 @@ Requires Node.js 18 or newer.
 Authentication is an explicit, headless-safe two-step flow:
 
 1. The agent calls `paydirt_begin_setup`. It immediately receives an `authorization_url`, `session_id`, and exact `finish_arguments`. The MCP process never launches a browser, sleeps, or polls.
-2. Open `authorization_url` in any browser and sign in to Paydirt.
+2. Open `authorization_url` in any browser, sign in to Paydirt with Google, and authorize Slack. Paydirt creates the app, forms, and feedback channel automatically.
 3. The agent calls `paydirt_finish_setup` with the returned arguments. A pending call returns immediately; call it again only after authorization is complete.
 
 `paydirt_setup` remains as a compatibility alias: call it without `session_id` to begin and with `session_id` to finish.
@@ -87,7 +87,8 @@ Supported triggers are user taps, successful in-app actions, screen appearance, 
 The agent inspects the app before setup and selects the existing subscription source of truth:
 
 - Native StoreKit uses Paydirt's built-in StoreKit integration.
-- RevenueCat and Superwall use host-app adapters, avoiding duplicate package dependencies.
+- RevenueCat uses installer-managed compatibility source and the familiar `Paydirt.enableRevenueCatIntegration(...)` call, avoiding duplicate package dependencies.
+- Native StoreKit covers ordinary App Store subscriptions, including apps where Superwall is only the paywall.
 - App-owned billing emits Paydirt's provider-independent cancellation event.
 - Apps without subscriptions can install manual feedback alone.
 
@@ -99,7 +100,7 @@ preserves the existing app behavior, and completes every unaffected requested
 form.
 
 An older RevenueCat version is not a blocker. The agent keeps the installed
-version and adapts the copied source adapter to the customer-info or
+version and adapts the installer-managed integration source to the customer-info or
 purchaser-info API already compiling in the app. Newer optional metadata may be
 omitted, or Paydirt can be called from the app's existing confirmed RevenueCat
 cancellation path.

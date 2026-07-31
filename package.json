@@ -1,6 +1,6 @@
 {
   "name": "paydirt-mcp",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "mcpName": "io.github.Paydirt-AI/paydirt-mcp",
   "description": "Agent-native installer and control plane for Paydirt iOS feedback",
   "main": "dist/index.js",
@@ -54,7 +54,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "@modelcontextprotocol/sdk": "^1.30.0"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

@@ -123,10 +123,10 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
     })),
     ios: {
       package_url: 'https://github.com/Paydirt-AI/paydirt-ios',
-      minimum_version: '2.0.0',
+      minimum_version: '2.0.2',
       deployment_target: 'iOS 15.0',
       provider_independent_core: true,
-      privacy_manifest: 'Bundled in Paydirt 2.0.0; do not copy it into the host app.',
+      privacy_manifest: 'Bundled in Paydirt 2.0.2; do not copy it into the host app.',
       theming: 'Use .automatic to inherit system light/dark appearance, .light or .dark, or construct PaydirtTheme with app colors.',
       info_plist: {
         NSMicrophoneUsageDescription: 'Used to record voice feedback',
@@ -148,9 +148,10 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
     },
     slack: {
       required_for_delivery: true,
-      next_tools: ['paydirt_slack_status', 'paydirt_connect_slack', 'paydirt_list_slack_channels', 'paydirt_set_form_channel'],
-      default: 'Slack OAuth creates a new public #paydirt-cancellation-feedback channel and assigns every installed form to it. If that name exists, it creates the next numbered name such as #paydirt-cancellation-feedback-2.',
-      rule: 'After authorization, call paydirt_slack_status and verify all_forms_assigned. Ask the user to choose a channel only when they requested a different one or their workspace blocked automatic channel creation. Do not report installation complete until assignment is verified.',
+      connected_during_setup: true,
+      next_tools: ['paydirt_slack_status', 'paydirt_list_slack_channels', 'paydirt_set_form_channel'],
+      default: 'The browser setup already authorized Slack, created a new public #paydirt-cancellation-feedback channel, and assigned every installed form to it. If that name existed, it created the next numbered name such as #paydirt-cancellation-feedback-2.',
+      rule: 'Call paydirt_slack_status once to verify all_forms_assigned. Ask the user to choose a channel only when they requested a different one or their workspace blocked automatic channel creation. Do not start a second OAuth flow after setup succeeds.',
     },
     host_app_preservation: {
       existing_feedback_ui: 'Preserve every existing host-app feedback form, button, screen, handler, and destination. Do not replace, repurpose, remove, or reroute one unless the user explicitly asks for that exact change.',
@@ -161,14 +162,14 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
     agent_actions: [
       'Inspect the iOS project and determine its app entry point, dependency setup, bundle ID, subscription source of truth, product IDs, and cancellation flow.',
       'Preserve all existing host-app feedback forms, buttons, screens, handlers, and destinations. Do not replace, repurpose, remove, or reroute them unless the user explicitly requested that exact change.',
-      'Install Paydirt 2.0.0 or newer in the existing dependency style. Paydirt has no third-party package dependency, so preserve the host app\'s existing RevenueCat, Superwall, or StoreKit setup. Do not ask the user to perform Xcode edits that the agent can safely make.',
+      'Install Paydirt 2.0.2 or newer in the existing dependency style. Paydirt has no third-party package dependency, so preserve the host app\'s existing RevenueCat, Superwall, or StoreKit setup. Do not ask the user to perform Xcode edits that the agent can safely make.',
       'Connect Paydirt to the subscription code already working in the app. Keep the installed provider packages, inspect the APIs already used by the app, adapt the small host-source bridge or use the existing customer-info/cancellation path, and omit unavailable optional metadata rather than blocking installation.',
       'Add NSMicrophoneUsageDescription if it is missing.',
       'Configure Paydirt using the exact public SDK key and form IDs above, then perform every instruction in ios.subscription. If its provider is auto, resolve it from the host source before proceeding.',
       includesRegularFeedback
         ? 'Add regular Paydirt feedback only at the user-approved UI or lifecycle event, preserving all existing feedback behavior. Wire cancellation through the provider contract only when cancellation feedback was requested.'
         : 'Do not create or wire regular feedback and do not modify existing feedback UI. Wire only the requested trial and/or subscription cancellation forms through the provider contract.',
-      'Connect Slack. By default, let OAuth create a new #paydirt-cancellation-feedback channel (or the next numbered name when taken) and assign every installed form automatically. After authorization call paydirt_slack_status and verify all_forms_assigned. Only list channels or ask the user to choose one if they requested a different channel or their workspace blocked automatic creation.',
+      'Slack was connected during browser setup and #paydirt-cancellation-feedback (or its numbered successor) was created. Call paydirt_slack_status and verify all_forms_assigned. Do not ask for another authorization. Only list channels or ask the user to choose one if they requested a different channel or workspace policy blocked automatic creation.',
       'Resolve dependencies and build the app. If provider automation cannot compile, report the exact provider blocker and preserve the existing app behavior. Do not add or replace regular feedback as a fallback unless the user explicitly requests it.',
       installTestForm
         ? `After the build succeeds, place ios.install_verification.app_ready_body_snippet inside a safe app-ready lifecycle body. Launch the app on an available simulator or connected development device and leave the Paydirt form visibly open so the developer can answer it immediately. Do not submit the form for them, do not run this automatic trigger in release builds, and do not claim installation is complete merely because the code compiled.`
@@ -225,13 +226,13 @@ function getAuthToken(): string {
 const server = new Server(
   {
     name: 'paydirt-mcp-server',
-    version: '2.1.5',
+    version: '2.1.6',
   },
   {
     capabilities: {
       tools: {},
     },
-    instructions: `Paydirt is an agent-installed iOS SDK for regular feedback, named contextual forms, trial cancellation, and subscription cancellation. A generic installation includes both trial cancellation and paid subscription cancellation by default. Install the use cases the user requests, and preserve every existing host-app feedback form, button, screen, handler, and destination unless the user explicitly asks for that exact change. Inspect the iOS project first, identify whether StoreKit, RevenueCat, Superwall, or an app-owned cancellation flow already supplies subscription state when cancellation forms are requested, then authenticate with paydirt_begin_setup and paydirt_finish_setup (paydirt_setup remains a compatibility alias). Connect Paydirt to the subscription code already working in the app. Preserve the installed subscription packages and adapt the small host-source bridge to the APIs already compiling there; unavailable optional metadata must not block installation. Never wait or open a browser inside the MCP process: return the authorization URL to the user and continue only after they authorize. Perform every returned agent_action in the repository. When the user asks for a named feedback form at a screen, button, lifecycle moment, or in-app action, use paydirt_add_feedback_form and preserve their placement description and existing host behavior exactly. Create or reuse forms; never create duplicates when a matching form exists. Slack OAuth should create a new #paydirt-cancellation-feedback channel, using the next numbered suffix when that name is taken, and assign every installed form automatically; ask the user to choose only when they requested a different channel or the workspace blocks channel creation. Raw questions and answers are the source of truth; AI summaries are optional. Never imply that Paydirt or another agent will take action on feedback. Do not stop at returning snippets when the user authorized installation: edit the host app at the requested placement, resolve dependencies, build, and verify the host app. If a requested subscription bridge is blocked, report the exact blocker and preserve existing app behavior while completing every unaffected requested form.`,
+    instructions: `Paydirt is an agent-installed iOS SDK for regular feedback, named contextual forms, trial cancellation, and subscription cancellation. A generic installation includes regular feedback plus both trial and paid subscription cancellation. Inspect the iOS project first, then call paydirt_begin_setup and send its single browser URL to the user. That setup signs the developer into Paydirt, creates the app and forms, authorizes Slack, creates #paydirt-cancellation-feedback, and assigns every form before paydirt_finish_setup can return ready. Do not initiate a second Slack OAuth flow after setup. Preserve every existing host-app feedback form, button, screen, handler, destination, purchase package, and subscription flow. For cancellation detection, use RevenueCat whenever it is already installed; otherwise use native StoreKit for App Store subscriptions, including apps where Superwall is only the paywall. Add any small integration source yourself and expose the familiar Paydirt setup calls—do not ask the developer to reason about adapters or upgrade a purchase SDK. Never wait or open a browser inside the MCP process: return the authorization URL and continue only after authorization. Perform every returned agent_action in the repository. When the user asks for a named feedback form at a screen, button, lifecycle moment, or in-app action, use paydirt_add_feedback_form and preserve their placement description and existing host behavior exactly. Create or reuse forms; never create duplicates. Raw questions and answers are the source of truth; AI summaries are optional. Never imply that Paydirt or another agent will take action on feedback. Do not stop at snippets: edit the host app, resolve dependencies, build, launch, and leave the Debug install-test form visibly open without submitting it.`,
   }
 );
 
