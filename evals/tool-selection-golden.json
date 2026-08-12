@@ -9,6 +9,12 @@
       "expected_tools": ["paydirt_begin_setup"]
     },
     {
+      "id": "direct-bored-human-install",
+      "category": "direct",
+      "prompt": "add paydirt",
+      "expected_tools": ["paydirt_begin_setup"]
+    },
+    {
       "id": "direct-finish-auth",
       "category": "direct",
       "prompt": "I authorized Paydirt in the browser. Continue the setup.",

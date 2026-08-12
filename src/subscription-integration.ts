@@ -41,7 +41,7 @@ export function normalizeSubscriptionProvider(
 
 export function subscriptionIntegrationContract(input: SubscriptionIntegrationInput) {
   const forms = formArguments(input);
-  const integrationBase = 'https://raw.githubusercontent.com/Paydirt-AI/paydirt-ios/2.0.2/IntegrationTemplates';
+  const integrationBase = 'https://raw.githubusercontent.com/Paydirt-AI/paydirt-ios/2.0.4/IntegrationTemplates';
 
   switch (input.provider) {
     case 'none':
