@@ -1,6 +1,6 @@
 {
   "paydirt": {
     "command": "npx",
-    "args": ["-y", "paydirt-mcp@2.3.0"]
+    "args": ["--yes", "--prefer-online", "paydirt-mcp@2.3.1"]
   }
 }

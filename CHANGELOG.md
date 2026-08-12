@@ -2,6 +2,15 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.3.1 - 2026-08-12
+
+- Report the running MCP package version to the Paydirt API and through the
+  MCP health check.
+- Add a server-controlled compatibility policy that recommends updates while
+  keeping supported older clients operational.
+- Make `npx` installation examples check npm for a newer stable release when
+  the coding agent restarts.
+
 ## 2.3.0 - 2026-08-12
 
 - Move the Slack/coding-agent delivery choice into browser onboarding so setup

@@ -20,6 +20,7 @@ import {
   subscriptionIntegrationContract,
   type SubscriptionProvider,
 } from './subscription-integration.js';
+import { PAYDIRT_MCP_VERSION } from './version.js';
 
 // Credentials file path
 const CREDENTIALS_DIR = join(homedir(), '.paydirt');
@@ -349,7 +350,7 @@ function getAuthToken(): string {
 const server = new Server(
   {
     name: 'paydirt-mcp-server',
-    version: '2.3.0',
+    version: PAYDIRT_MCP_VERSION,
   },
   {
     capabilities: {
@@ -1196,8 +1197,28 @@ const toolOutputSchemas: Record<string, { type: 'object'; properties?: Record<st
   paydirt_update_form: wrappedFormOutputSchema,
   paydirt_health_check: {
     type: 'object',
-    properties: { status: { type: 'string' }, authenticated: { type: 'boolean' } },
-    required: ['status', 'authenticated'],
+    properties: {
+      status: { type: 'string' },
+      authenticated: { type: 'boolean' },
+      installed_version: { type: 'string' },
+      latest_version: { type: ['string', 'null'] },
+      minimum_supported_version: { type: ['string', 'null'] },
+      update_available: { type: ['boolean', 'null'] },
+      update_required: { type: ['boolean', 'null'] },
+      update_status: { type: 'string' },
+      update_action: { type: ['string', 'null'] },
+    },
+    required: [
+      'status',
+      'authenticated',
+      'installed_version',
+      'latest_version',
+      'minimum_supported_version',
+      'update_available',
+      'update_required',
+      'update_status',
+      'update_action',
+    ],
   },
   paydirt_update_app: appOutputSchema,
   paydirt_get_form: wrappedFormOutputSchema,
@@ -1569,6 +1590,26 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('Paydirt MCP server running on stdio');
+
+  let lastNotifiedVersion: string | null = null;
+  const checkForUpdate = () => {
+    void api.getMcpVersionPolicy().then((policy) => {
+      if (
+        policy.update_available
+        && policy.update_action
+        && policy.latest_version !== lastNotifiedVersion
+      ) {
+        lastNotifiedVersion = policy.latest_version;
+        console.error(`[Paydirt] ${policy.status}: ${policy.update_action}`);
+      }
+    }).catch(() => {
+      // Update checks are best effort and must never prevent MCP startup.
+    });
+  };
+
+  checkForUpdate();
+  const updateTimer = setInterval(checkForUpdate, 6 * 60 * 60 * 1_000);
+  updateTimer.unref();
 }
 
 main().catch(console.error);
