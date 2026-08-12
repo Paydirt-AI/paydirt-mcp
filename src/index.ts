@@ -31,10 +31,18 @@ interface StoredCredentials {
   api_key?: string;
 }
 
-type PaydirtUseCase = 'regular_feedback' | 'trial_cancellation' | 'subscription_cancellation';
+type PaydirtUseCase = 'regular_feedback' | 'feature_request' | 'trial_cancellation' | 'subscription_cancellation';
+type DeliveryPreference = 'both' | 'slack' | 'agents';
+
+const SUPPORTED_USE_CASES: PaydirtUseCase[] = [
+  'regular_feedback',
+  'feature_request',
+  'trial_cancellation',
+  'subscription_cancellation',
+];
 
 const DEFAULT_USE_CASES: PaydirtUseCase[] = [
-  'regular_feedback',
+  'feature_request',
   'trial_cancellation',
   'subscription_cancellation',
 ];
@@ -42,7 +50,7 @@ const DEFAULT_USE_CASES: PaydirtUseCase[] = [
 function requestedUseCases(value: unknown): PaydirtUseCase[] {
   if (!Array.isArray(value)) return DEFAULT_USE_CASES;
   const valid = value.filter((item): item is PaydirtUseCase =>
-    typeof item === 'string' && DEFAULT_USE_CASES.includes(item as PaydirtUseCase)
+    typeof item === 'string' && SUPPORTED_USE_CASES.includes(item as PaydirtUseCase)
   );
   return valid.length > 0 ? [...new Set(valid)] : DEFAULT_USE_CASES;
 }
@@ -51,9 +59,18 @@ function formTypesForUseCases(useCases: PaydirtUseCase[]): string[] {
   const types = useCases.map((useCase) => {
     if (useCase === 'subscription_cancellation') return 'cancellation';
     if (useCase === 'trial_cancellation') return 'trial_expiration';
+    if (useCase === 'feature_request') return 'feature_request';
     return 'custom';
   });
   return [...new Set(types)];
+}
+
+function swiftString(value: string): string {
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r');
 }
 
 function installationContract(
@@ -62,26 +79,34 @@ function installationContract(
   forms: Array<Pick<api.Form, 'id' | 'type' | 'name'>>,
   useCases: PaydirtUseCase[],
   subscriptionProvider: SubscriptionProvider,
-  subscriptionProductIds: string[]
+  subscriptionProductIds: string[],
+  featurePlacement: string,
+  deliveryPreference: DeliveryPreference,
+  slackStatus: Awaited<ReturnType<typeof api.getSlackStatus>> | null
 ) {
-  const includesRegularFeedback = useCases.includes('regular_feedback');
+  const includesRegularFeedback = useCases.includes('regular_feedback') || useCases.includes('feature_request');
   const byType = new Map(forms.map((form) => [form.type, form]));
   const cancellationId = byType.get('cancellation')?.id;
   const trialId = byType.get('trial_expiration')?.id;
-  const feedbackId = byType.get('custom')?.id;
+  const featureRequestId = byType.get('feature_request')?.id;
+  const feedbackId = featureRequestId ?? byType.get('custom')?.id;
   const prefetchIds = [cancellationId, trialId, feedbackId].filter(Boolean) as string[];
-  const installTestForm = byType.get('custom') ?? byType.get('trial_expiration') ?? byType.get('cancellation') ?? forms[0];
-  const installTestPresentation = installTestForm
-    ? `Paydirt.presentForm(formId: "${installTestForm.id}", metadata: ["paydirt_install_test": true])`
-    : null;
+  const hasThreeFormSetup = Boolean(featureRequestId && trialId && cancellationId);
+  const requiresSlackDelivery = deliveryPreference !== 'agents';
+  const installTestForm = byType.get('feature_request') ?? byType.get('custom') ?? byType.get('trial_expiration') ?? byType.get('cancellation') ?? forms[0];
   const installTestKey = installTestForm
-    ? `paydirt.install-test.${appId}.${installTestForm.id}`
+    ? `paydirt.install-test.${appId}.${hasThreeFormSetup ? 'three-form-check' : installTestForm.id}`
+    : null;
+  const installTestPresentation = hasThreeFormSetup
+    ? `Paydirt.presentSetupCheck(featureFormId: "${featureRequestId}", trialCancellationFormId: "${trialId}", subscriptionCancellationFormId: "${cancellationId}", requiresSlackDelivery: ${requiresSlackDelivery}, completionKey: "${installTestKey}")`
+    : installTestForm
+      ? `Paydirt.presentForm(formId: "${installTestForm.id}", metadata: ["paydirt_install_test": true])`
     : null;
   const installTestSnippet = installTestForm && installTestKey
     ? `#if DEBUG
 let paydirtInstallTestKey = "${installTestKey}"
 if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
-    UserDefaults.standard.set(true, forKey: paydirtInstallTestKey)
+    ${hasThreeFormSetup ? '// The setup check saves this key only after every required delivery is verified.' : 'UserDefaults.standard.set(true, forKey: paydirtInstallTestKey)'}
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
         ${installTestPresentation}
     }
@@ -123,10 +148,10 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
     })),
     ios: {
       package_url: 'https://github.com/Paydirt-AI/paydirt-ios',
-      minimum_version: '2.0.2',
+      minimum_version: '2.0.4',
       deployment_target: 'iOS 15.0',
       provider_independent_core: true,
-      privacy_manifest: 'Bundled in Paydirt 2.0.2; do not copy it into the host app.',
+      privacy_manifest: 'Bundled in Paydirt 2.0.4; do not copy it into the host app.',
       theming: 'Use .automatic to inherit system light/dark appearance, .light or .dark, or construct PaydirtTheme with app colors.',
       info_plist: {
         NSMicrophoneUsageDescription: 'Used to record voice feedback',
@@ -136,22 +161,109 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
       regular_feedback_trigger: feedbackId
         ? `Paydirt.presentForm(formId: "${feedbackId}", userId: currentUserId)`
         : null,
+      feature_request_placement: featureRequestId ? {
+        form_id: featureRequestId,
+        requested_placement: featurePlacement,
+        presentation: `Paydirt.presentForm(formId: "${featureRequestId}", metadata: ["paydirt_placement": "${swiftString(featurePlacement)}"])`,
+        behavior: 'Place Suggest a Feature at the confirmed location. Settings is the recommended default; a semantic successful-action trigger may be used when the developer chose one. Preserve the host action and allow this placement to be changed later.',
+      } : null,
       install_verification: installTestForm ? {
         required: true,
+        mode: hasThreeFormSetup ? 'three_form_setup_check' : 'single_form_fallback',
         form_id: installTestForm.id,
         form_name: installTestForm.name,
+        tests: hasThreeFormSetup ? [
+          {
+            form_id: featureRequestId,
+            label: 'Suggest a Feature',
+            destination: requiresSlackDelivery ? '#paydirt-suggest-a-feature' : 'Paydirt agent responses',
+          },
+          {
+            form_id: trialId,
+            label: 'Trial Cancellation',
+            destination: requiresSlackDelivery ? '#paydirt-cancellations' : 'Paydirt agent responses',
+          },
+          {
+            form_id: cancellationId,
+            label: 'Subscription Cancellation',
+            destination: requiresSlackDelivery ? '#paydirt-cancellations' : 'Paydirt agent responses',
+          },
+        ] : [{
+          form_id: installTestForm.id,
+          label: installTestForm.name,
+          destination: requiresSlackDelivery ? 'assigned Slack channel' : 'Paydirt agent responses',
+        }],
         presentation: installTestPresentation,
         app_ready_body_snippet: installTestSnippet,
         repeat_test_reset: `UserDefaults.standard.removeObject(forKey: "${installTestKey}")`,
-        behavior: 'Add a DEBUG-only one-time app-ready trigger, build and launch the app on an available simulator or connected development device, and leave this form visibly open for the developer. Never submit it for them. Do not include the automatic trigger in release builds.',
+        behavior: hasThreeFormSetup
+          ? `Add a DEBUG-only one-time app-ready trigger, build and launch on a simulator or connected device, and leave the setup check open. The developer personally submits all three tests. Completion means 3/3 ${requiresSlackDelivery ? 'delivered to the two expected Slack channels' : 'received by Paydirt'}. Never submit a test for them or include the trigger in release builds.`
+          : 'Add a DEBUG-only one-time app-ready trigger, build and launch the app on an available simulator or connected development device, and leave this form visibly open for the developer. Never submit it for them. Do not include the automatic trigger in release builds.',
       } : null,
     },
+    delivery: {
+      selection_required_after_install_verification: false,
+      selected: deliveryPreference,
+      recommended: 'both',
+      prompt: 'The developer selected a delivery destination during browser onboarding. Do not ask again unless they request a change.',
+      options: [
+        {
+          id: 'both',
+          label: 'Slack and coding agents',
+          recommended: true,
+          behavior: 'Connect Slack, assign every installed form, and keep read-only response access available through Paydirt agent tools.',
+        },
+        {
+          id: 'slack',
+          label: 'Slack only',
+          recommended: false,
+          behavior: 'Connect Slack and assign every installed form. Do not proactively surface feedback in agent sessions.',
+        },
+        {
+          id: 'agents',
+          label: 'Coding agents only',
+          recommended: false,
+          behavior: 'Keep responses available through read-only Paydirt agent tools. Do not require or start Slack authorization.',
+        },
+      ],
+      agent_sessions: {
+        available_after_setup: true,
+        read_only: true,
+        rule: 'Do not inject every response into every session and never create tasks or change code automatically. Surface a new-response count or fetch raw responses only when the developer asks.',
+      },
+    },
     slack: {
-      required_for_delivery: true,
-      connected_during_setup: true,
-      next_tools: ['paydirt_slack_status', 'paydirt_list_slack_channels', 'paydirt_set_form_channel'],
-      default: 'The browser setup already authorized Slack, created a new public #paydirt-cancellation-feedback channel, and assigned every installed form to it. If that name existed, it created the next numbered name such as #paydirt-cancellation-feedback-2.',
-      rule: 'Call paydirt_slack_status once to verify all_forms_assigned. Ask the user to choose a channel only when they requested a different one or their workspace blocked automatic channel creation. Do not start a second OAuth flow after setup succeeds.',
+      required_for_setup: deliveryPreference === 'both' || deliveryPreference === 'slack',
+      connected_during_setup: Boolean(slackStatus?.connected),
+      feature_channel: slackStatus ? {
+        id: slackStatus.feature_channel_id,
+        name: slackStatus.feature_channel_name,
+        assignment: slackStatus.assignments.feature,
+      } : null,
+      cancellation_channel: slackStatus ? {
+        id: slackStatus.cancellation_channel_id,
+        name: slackStatus.cancellation_channel_name,
+        assignment: slackStatus.assignments.cancellation,
+      } : null,
+      all_forms_assigned: slackStatus?.all_forms_assigned ?? false,
+      two_channel_routing: slackStatus?.two_channel_routing ?? false,
+      connect_when_selected: ['both', 'slack'],
+      next_tools: ['paydirt_connect_slack', 'paydirt_slack_status', 'paydirt_list_slack_channels', 'paydirt_set_form_channel'],
+      rule: deliveryPreference === 'agents'
+        ? 'Slack was skipped during onboarding. Do not start Slack OAuth unless the developer asks to change delivery.'
+        : 'Slack OAuth and two-channel provisioning ran during onboarding. Suggest a Feature routes to #paydirt-suggest-a-feature; trial and subscription cancellations route to #paydirt-cancellations. Repair setup if all_forms_assigned is false.',
+    },
+    daily_brief: {
+      included_with_coding_agent_delivery: deliveryPreference !== 'slack',
+      eligible: deliveryPreference !== 'slack',
+      create_after_delivery_tests_pass: deliveryPreference !== 'slack',
+      recommended_schedule: 'Every day at 9:00 AM in the developer\'s local timezone',
+      selection_disclosure: 'Selecting Slack and coding agents or coding agents only includes this read-only daily brief. The developer can pause, edit, or delete it in the host scheduling UI.',
+      task_prompt: `Check Paydirt app ${appId} for the last 24 hours using paydirt_get_feedback_digest. Report total new completed feedback, Suggest a Feature count, Trial Cancellation count, Subscription Cancellation count, other feedback count, and the change from the previous 24-hour period. Include concise read-only highlights. If there is no new feedback, say "No new Paydirt feedback in the last 24 hours." Never create coding tasks, edit files, or act on feedback automatically.`,
+      host_behavior: {
+        codex: 'When the Codex scheduled-task capability is available, create a native daily task after 3/3 delivery verification and confirm its local run time.',
+        other_agents: 'Create the recurring task after delivery verification only when the current host exposes a real scheduling capability. Otherwise provide the saved task prompt and explain that the host must supply scheduling; do not claim a schedule exists.',
+      },
     },
     host_app_preservation: {
       existing_feedback_ui: 'Preserve every existing host-app feedback form, button, screen, handler, and destination. Do not replace, repurpose, remove, or reroute one unless the user explicitly asks for that exact change.',
@@ -162,27 +274,38 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
     agent_actions: [
       'Inspect the iOS project and determine its app entry point, dependency setup, bundle ID, subscription source of truth, product IDs, and cancellation flow.',
       'Preserve all existing host-app feedback forms, buttons, screens, handlers, and destinations. Do not replace, repurpose, remove, or reroute them unless the user explicitly requested that exact change.',
-      'Install Paydirt 2.0.2 or newer in the existing dependency style. Paydirt has no third-party package dependency, so preserve the host app\'s existing RevenueCat, Superwall, or StoreKit setup. Do not ask the user to perform Xcode edits that the agent can safely make.',
+      'Install Paydirt 2.0.4 or newer in the existing dependency style. Paydirt has no third-party package dependency, so preserve the host app\'s existing RevenueCat, Superwall, or StoreKit setup. Do not ask the user to perform Xcode edits that the agent can safely make.',
       'Connect Paydirt to the subscription code already working in the app. Keep the installed provider packages, inspect the APIs already used by the app, adapt the small host-source bridge or use the existing customer-info/cancellation path, and omit unavailable optional metadata rather than blocking installation.',
       'Add NSMicrophoneUsageDescription if it is missing.',
       'Configure Paydirt using the exact public SDK key and form IDs above, then perform every instruction in ios.subscription. If its provider is auto, resolve it from the host source before proceeding.',
       includesRegularFeedback
         ? 'Add regular Paydirt feedback only at the user-approved UI or lifecycle event, preserving all existing feedback behavior. Wire cancellation through the provider contract only when cancellation feedback was requested.'
         : 'Do not create or wire regular feedback and do not modify existing feedback UI. Wire only the requested trial and/or subscription cancellation forms through the provider contract.',
-      'Slack was connected during browser setup and #paydirt-cancellation-feedback (or its numbered successor) was created. Call paydirt_slack_status and verify all_forms_assigned. Do not ask for another authorization. Only list channels or ask the user to choose one if they requested a different channel or workspace policy blocked automatic creation.',
       'Resolve dependencies and build the app. If provider automation cannot compile, report the exact provider blocker and preserve the existing app behavior. Do not add or replace regular feedback as a fallback unless the user explicitly requests it.',
       installTestForm
-        ? `After the build succeeds, place ios.install_verification.app_ready_body_snippet inside a safe app-ready lifecycle body. Launch the app on an available simulator or connected development device and leave the Paydirt form visibly open so the developer can answer it immediately. Do not submit the form for them, do not run this automatic trigger in release builds, and do not claim installation is complete merely because the code compiled.`
+        ? `After the build succeeds, place ios.install_verification.app_ready_body_snippet inside a safe app-ready lifecycle body. Launch the app on an available simulator or connected development device and leave the Paydirt setup check visibly open so the developer can answer it immediately. Do not submit any test for them, do not run this automatic trigger in release builds, and do not claim installation is complete until the setup check verifies every required delivery.`
         : 'Report that no Paydirt form was returned for immediate install verification and do not claim the form test passed.',
-      'Report the files changed, build and launch commands and results, Slack assignment, enabled use cases, the form left open for immediate verification, any narrowly deferred cancellation automation, and an exact repeatable manual test path.',
+      deliveryPreference === 'agents'
+        ? 'Respect the coding-agents-only delivery choice made during onboarding. Do not start Slack OAuth unless the developer asks to change it.'
+        : 'Verify the Slack status returned by onboarding: Suggest a Feature must be assigned to the feature channel, and both cancellation forms must be assigned to the cancellation channel. If verification is incomplete, call paydirt_connect_slack to repair it.',
+      'Report the files changed, build and launch commands and results, selected delivery route, enabled use cases, the setup check left open for immediate verification, any narrowly deferred cancellation automation, and an exact repeatable manual test path.',
+      deliveryPreference === 'slack'
+        ? 'Respect the Slack-only delivery choice. Do not offer or create a coding-agent daily brief unless the developer later enables coding-agent delivery.'
+        : 'After every required delivery test passes, create the included daily brief with the current host\'s native scheduled-task capability and daily_brief.task_prompt. Confirm the 9:00 AM local schedule. If scheduling is unavailable, report that limitation and provide the prompt without claiming a schedule exists; this must not block Paydirt installation.',
     ],
     completion_requirements: {
       host_app_build_passed: true,
       host_app_launched: true,
-      install_test_form_visible: true,
-      test_form_not_submitted_by_agent: true,
+      install_test_setup_visible: true,
+      required_test_submissions: hasThreeFormSetup ? 3 : 1,
+      test_forms_not_submitted_by_agent: true,
+      test_deliveries_verified: true,
       automatic_test_trigger_debug_only: true,
-      slack_channel_assignment_verified: true,
+      delivery_preference_confirmed_during_onboarding: true,
+      slack_channel_assignment_verified_when_selected: true,
+      agent_response_access_read_only_when_selected: true,
+      daily_brief_created_after_tests_when_host_supports_scheduling: deliveryPreference !== 'slack',
+      daily_brief_limitation_reported_when_scheduling_is_unavailable: deliveryPreference !== 'slack',
     },
   };
 }
@@ -226,13 +349,13 @@ function getAuthToken(): string {
 const server = new Server(
   {
     name: 'paydirt-mcp-server',
-    version: '2.1.6',
+    version: '2.3.0',
   },
   {
     capabilities: {
       tools: {},
     },
-    instructions: `Paydirt is an agent-installed iOS SDK for regular feedback, named contextual forms, trial cancellation, and subscription cancellation. A generic installation includes regular feedback plus both trial and paid subscription cancellation. Inspect the iOS project first, then call paydirt_begin_setup and send its single browser URL to the user. That setup signs the developer into Paydirt, creates the app and forms, authorizes Slack, creates #paydirt-cancellation-feedback, and assigns every form before paydirt_finish_setup can return ready. Do not initiate a second Slack OAuth flow after setup. Preserve every existing host-app feedback form, button, screen, handler, destination, purchase package, and subscription flow. For cancellation detection, use RevenueCat whenever it is already installed; otherwise use native StoreKit for App Store subscriptions, including apps where Superwall is only the paywall. Add any small integration source yourself and expose the familiar Paydirt setup calls—do not ask the developer to reason about adapters or upgrade a purchase SDK. Never wait or open a browser inside the MCP process: return the authorization URL and continue only after authorization. Perform every returned agent_action in the repository. When the user asks for a named feedback form at a screen, button, lifecycle moment, or in-app action, use paydirt_add_feedback_form and preserve their placement description and existing host behavior exactly. Create or reuse forms; never create duplicates. Raw questions and answers are the source of truth; AI summaries are optional. Never imply that Paydirt or another agent will take action on feedback. Do not stop at snippets: edit the host app, resolve dependencies, build, launch, and leave the Debug install-test form visibly open without submitting it.`,
+    instructions: `Paydirt is an agent-installed iOS SDK for Suggest a Feature, named contextual forms, trial cancellation, and subscription cancellation. When the user says "add Paydirt," inspect the app first and confirm one concise form plan before authorization: recommend cancellation feedback after the real confirmed cancellation flow plus Suggest a Feature in Settings when subscriptions exist; otherwise explain that cancellation has no trigger and recommend Suggest a Feature. After confirmation, call paydirt_begin_setup with form_plan_confirmed true and the selected use_cases. Browser onboarding signs the developer into Paydirt, creates or reuses the app and forms, and asks whether delivery should be Slack and coding agents (recommended), Slack only, or coding agents only. Coding-agent delivery includes a read-only daily 9:00 AM feedback brief created after verification when the host supports scheduling. When Slack is selected, onboarding runs Slack OAuth, provisions #paydirt-suggest-a-feature and #paydirt-cancellations, and assigns the three forms before releasing setup. Preserve every existing host-app feedback form, button, screen, handler, destination, purchase package, and subscription flow. Use RevenueCat when already installed; otherwise use native StoreKit for App Store subscriptions, including apps where Superwall only presents paywalls. Perform every returned agent_action: edit, resolve dependencies, build, launch, and leave the Debug setup check visibly open without submitting it. The developer must personally submit Suggest a Feature, Trial Cancellation, and Subscription Cancellation; completion is 3/3 verified deliveries. Respect the saved delivery choice and repair Slack only when verification is incomplete. After testing, create the included read-only daily brief for coding-agent delivery when the host exposes real scheduling; otherwise report the limitation. Agent access is read-only; never inject every response into every session, create tasks, or change code automatically. Never wait, poll, or open a browser inside the MCP process.`,
   }
 );
 
@@ -253,9 +376,17 @@ const setupInputProperties = {
     type: 'array',
     items: {
       type: 'string',
-      enum: ['regular_feedback', 'trial_cancellation', 'subscription_cancellation'],
+      enum: ['regular_feedback', 'feature_request', 'trial_cancellation', 'subscription_cancellation'],
     },
-    description: 'Feedback experiences to install. Defaults to regular feedback, trial cancellation, and subscription cancellation.',
+    description: 'Confirmed feedback experiences to install. The recommended plan is Suggest a Feature plus trial and paid cancellation when subscriptions exist.',
+  },
+  form_plan_confirmed: {
+    type: 'boolean',
+    description: 'Set true only after the developer confirms cancellation, Suggest a Feature, or a customized form plan. Without confirmation, setup returns a concise confirmation prompt and does not start authorization.',
+  },
+  feature_placement: {
+    type: 'string',
+    description: 'Developer-confirmed placement for Suggest a Feature, such as settings or after_successful_export. Defaults to settings.',
   },
   uses_revenuecat: {
     type: 'boolean',
@@ -284,8 +415,11 @@ function setupRequestContext(args: Record<string, unknown> | undefined) {
         typeof value === 'string' && value.trim().length > 0
       )
     : [];
+  const featurePlacement = typeof args?.feature_placement === 'string' && args.feature_placement.trim()
+    ? args.feature_placement.trim()
+    : 'settings';
 
-  return { useCases, subscriptionProvider, subscriptionProductIds };
+  return { useCases, subscriptionProvider, subscriptionProductIds, featurePlacement };
 }
 
 function setupFinishArguments(
@@ -300,7 +434,42 @@ function setupFinishArguments(
 }
 
 async function beginSetup(args: Record<string, unknown> | undefined) {
-  const { useCases } = setupRequestContext(args);
+  const { useCases, subscriptionProvider, featurePlacement } = setupRequestContext(args);
+
+  if (args?.form_plan_confirmed !== true) {
+    const hasSubscriptions = subscriptionProvider !== 'none';
+    return {
+      success: true,
+      status: 'confirmation_required',
+      message: hasSubscriptions
+        ? `I found ${subscriptionProvider === 'auto' ? 'a subscription flow' : subscriptionProvider} and recommend three clear forms: Suggest a Feature in ${featurePlacement}, Trial Cancellation, and Subscription Cancellation. Add all three and show them working? You can move or remove any later.`
+        : `I did not find a subscription flow, so cancellation feedback would not have a real trigger. Add Suggest a Feature in ${featurePlacement} and show it working? You can move it later.`,
+      confirmation: {
+        recommended: hasSubscriptions ? 'add_both' : 'suggest_feature_only',
+        options: hasSubscriptions
+          ? [
+              { id: 'add_both', label: 'Add all three', use_cases: ['feature_request', 'trial_cancellation', 'subscription_cancellation'] },
+              { id: 'cancellation_only', label: 'Add both cancellation forms', use_cases: ['trial_cancellation', 'subscription_cancellation'] },
+              { id: 'customize', label: 'Customize', follow_up: 'Ask where Suggest a Feature should live: Settings, a detected successful-action trigger, or another location the developer describes.' },
+            ]
+          : [
+              { id: 'suggest_feature_only', label: 'Add Suggest a Feature', use_cases: ['feature_request'] },
+              { id: 'customize', label: 'Customize', follow_up: 'Ask whether another form is wanted and where it should appear.' },
+            ],
+        feature_placement: featurePlacement,
+      },
+      next_tool: 'paydirt_begin_setup',
+      next_arguments: {
+        ...args,
+        form_plan_confirmed: true,
+        use_cases: hasSubscriptions
+          ? ['feature_request', 'trial_cancellation', 'subscription_cancellation']
+          : ['feature_request'],
+        feature_placement: featurePlacement,
+      },
+    };
+  }
+
   const session = await api.startSetupSession();
   const setupParams = new URLSearchParams({ session: session.session_id });
   setupParams.set('required_forms', formTypesForUseCases(useCases).join(','));
@@ -364,14 +533,21 @@ async function finishSetup(
     app_id: status.app_id,
     api_key: status.api_key,
   });
-  const { useCases, subscriptionProvider, subscriptionProductIds } = setupRequestContext(args);
+  const deliveryPreference = status.delivery_preference || 'agents';
+  const slackStatus = deliveryPreference === 'agents'
+    ? null
+    : await api.getSlackStatus(status.auth_token, status.app_id);
+  const { useCases, subscriptionProvider, subscriptionProductIds, featurePlacement } = setupRequestContext(args);
   const contract = installationContract(
     status.api_key,
     status.app_id,
     status.forms || [],
     useCases,
     subscriptionProvider,
-    subscriptionProductIds
+    subscriptionProductIds,
+    featurePlacement,
+    deliveryPreference,
+    slackStatus
   );
 
   return {
@@ -402,7 +578,7 @@ const toolDefinitions = [
   },
   {
     name: 'paydirt_begin_setup',
-    description: 'Use this when installing Paydirt for a new user, machine, or iOS app and authentication has not been completed. Inspect the host first and pass its app identity, use cases, and subscription provider. Returns authorization_url, session_id, and exact finish_arguments immediately; it never launches a browser, sleeps, or polls.',
+    description: 'Use this when installing Paydirt for a new user, machine, or iOS app. Inspect the host first. Without form_plan_confirmed, returns the concise cancellation/Suggest a Feature confirmation and does not start authorization. After confirmation, pass the selected use_cases and placement to receive authorization_url and finish_arguments immediately.',
     inputSchema: {
       type: 'object' as const,
       properties: setupInputProperties,
@@ -411,7 +587,7 @@ const toolDefinitions = [
   },
   {
     name: 'paydirt_finish_setup',
-    description: 'Use this when the user has opened the authorization URL returned by paydirt_begin_setup. Checks one setup session and returns immediately. If pending, do not loop or sleep. When ready, securely saves credentials and returns the complete host-app installation, Slack, build, and verification contract.',
+    description: 'Use this when the user has opened the authorization URL returned by paydirt_begin_setup. Checks one setup session and returns immediately. If pending, do not loop or sleep. When ready, securely saves credentials and returns the host-app build, visible verification, and post-verification delivery-choice contract.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -547,7 +723,7 @@ const toolDefinitions = [
         },
         slack_channel: {
           type: 'string',
-          description: 'Optional Slack channel name (with or without #) or channel ID. If omitted, the contract still requires the agent to connect Slack and assign a channel before completion.',
+          description: 'Optional Slack channel name (with or without #) or channel ID when the developer already selected Slack delivery. If omitted, Slack is deferred until after visual verification.',
         },
       },
       required: ['app_id', 'title', 'placement', 'trigger'],
@@ -609,8 +785,28 @@ const toolDefinitions = [
     },
   },
   {
+    name: 'paydirt_get_feedback_digest',
+    description: 'Use this when the user or a scheduled task needs a read-only daily or periodic Paydirt brief. Returns completed-response totals by feedback type, comparison with the previous equal period, and concise highlights. Never turn feedback into code changes or tasks automatically.',
+    inputSchema: {
+      type: 'object' as const,
+      properties: {
+        app_id: {
+          type: 'string',
+          description: 'The Paydirt app ID',
+        },
+        hours: {
+          type: 'number',
+          minimum: 1,
+          maximum: 168,
+          description: 'Period length in hours (default: 24). The comparison uses the immediately preceding period of equal length.',
+        },
+      },
+      required: ['app_id'],
+    },
+  },
+  {
     name: 'paydirt_connect_slack',
-    description: 'Use this when the user asks to connect Slack or setup requires Slack delivery. Returns the Slack OAuth URL. Authorization creates a new #paydirt-cancellation-feedback channel (numbered when the name is taken) and assigns every installed form automatically when workspace policy allows it.',
+    description: 'Use this when the user asks to connect Slack or repair Slack delivery after onboarding. Returns the Slack OAuth URL. Authorization provisions #paydirt-suggest-a-feature for feature forms and #paydirt-cancellations for trial and subscription cancellation forms, then assigns each form automatically when workspace policy allows it.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -758,7 +954,7 @@ const toolDefinitions = [
   },
   {
     name: 'paydirt_slack_status',
-    description: 'Use this when Slack authorization has finished and before declaring setup complete. Reports the created Paydirt cancellation feedback channel and whether every installed form is assigned. List or select channels only when automatic creation was blocked or the user requested another channel.',
+    description: 'Use this when the developer selected Slack or combined delivery and completed authorization. Reports the Paydirt feedback channel and whether every installed form is assigned. Do not call it for agent-only delivery.',
     inputSchema: {
       type: 'object' as const,
       properties: {
@@ -857,6 +1053,9 @@ const toolAnnotations: Record<string, PaydirtToolAnnotations> = {
   },
   paydirt_get_summary: {
     title: 'Summarize Feedback', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
+  },
+  paydirt_get_feedback_digest: {
+    title: 'Get Feedback Digest', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
   },
   paydirt_connect_slack: {
     title: 'Connect Slack', readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true,
@@ -968,6 +1167,19 @@ const toolOutputSchemas: Record<string, { type: 'object'; properties?: Record<st
       period: { type: 'string' },
     },
     required: ['summary', 'top_reasons', 'response_count', 'period'],
+  },
+  paydirt_get_feedback_digest: {
+    type: 'object',
+    properties: {
+      app_id: { type: 'string' },
+      period: { type: 'object' },
+      counts: { type: 'object' },
+      previous_period_total: { type: 'number' },
+      change_from_previous_period: { type: 'number' },
+      truncated: { type: 'boolean' },
+      items: { type: 'array', items: { type: 'object' } },
+    },
+    required: ['app_id', 'period', 'counts', 'previous_period_total', 'change_from_previous_period', 'truncated', 'items'],
   },
   paydirt_connect_slack: {
     type: 'object', properties: { auth_url: { type: 'string' } }, required: ['auth_url'],
@@ -1162,6 +1374,13 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             channel_id: form.slack_channel_id,
             verified: true,
           };
+        } else if (!requestedSlackChannel) {
+          slack = {
+            status: 'deferred',
+            required: false,
+            verified: false,
+            next_action: 'Build and show the form first. Then ask whether delivery should be Slack and coding agents (recommended), Slack only, or coding agents only. Connect Slack only when selected.',
+          };
         } else {
           const slackStatus = await api.getSlackStatus(AUTH_TOKEN, appId);
           if (!slackStatus.connected) {
@@ -1235,6 +1454,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args?.app_id as string,
           args?.form_id as string | undefined,
           args?.days as number | undefined
+        );
+        break;
+
+      case 'paydirt_get_feedback_digest':
+        result = await api.getFeedbackDigest(
+          AUTH_TOKEN,
+          args?.app_id as string,
+          args?.hours as number | undefined
         );
         break;
 

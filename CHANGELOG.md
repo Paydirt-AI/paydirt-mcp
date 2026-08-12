@@ -2,6 +2,30 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.3.0 - 2026-08-12
+
+- Move the Slack/coding-agent delivery choice into browser onboarding so setup
+  cannot silently finish before a destination is selected.
+- Provision `#paydirt-suggest-a-feature` and `#paydirt-cancellations` through
+  Slack OAuth and route the three standard forms into their typed channels.
+- Return the saved delivery preference and verified Slack channel assignments
+  to the coding agent instead of asking for delivery again after installation.
+- Include a post-verification daily brief with coding-agent delivery and add a read-only
+  `paydirt_get_feedback_digest` tool with typed totals, prior-period change, and
+  concise highlights for hosts with native scheduling.
+
+## 2.2.0 - 2026-08-03
+
+- Confirm cancellation and Suggest a Feature choices before authorization.
+- Recommend Settings for Suggest a Feature while supporting app-specific
+  successful-action placements that can be changed later.
+- Release app credentials and forms without requiring Slack during browser setup.
+- Require agents to show the installed form on a simulator or connected device
+  before asking for Slack, coding-agent, or combined delivery.
+- Make combined Slack and read-only coding-agent access the recommended delivery
+  option without injecting responses or taking automatic action.
+- Generate new installations against Paydirt iOS 2.0.4 or newer.
+
 ## 2.1.6 - 2026-07-31
 
 - Combined Google and Slack authorization into the single browser setup gate.

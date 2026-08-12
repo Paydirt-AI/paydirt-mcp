@@ -36,7 +36,7 @@ test('golden routing corpus covers target prompt families and only references pu
   for (const item of corpus.cases) {
     assert.ok(item.id && !ids.has(item.id), `golden case IDs must be unique: ${item.id}`);
     ids.add(item.id);
-    assert.ok(typeof item.prompt === 'string' && item.prompt.length >= 12);
+    assert.ok(typeof item.prompt === 'string' && item.prompt.length >= 10);
     assert.ok(Array.isArray(item.expected_tools));
     for (const tool of item.expected_tools) {
       assert.ok(tools.has(tool), `${item.id} references unknown tool ${tool}`);

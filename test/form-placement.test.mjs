@@ -41,5 +41,24 @@ test('returns an exact, escaped Swift statement and mandatory verification actio
   assert.match(contract.ios.note, /Preserve the existing host-app form/);
   assert.ok(contract.agent_actions.some((action) => action.includes('Do not replace')));
   assert.equal(contract.completion_requirements.host_app_build_passed, true);
-  assert.equal(contract.completion_requirements.slack_channel_assigned, true);
+  assert.equal(contract.completion_requirements.slack_channel_assigned_when_selected, true);
+});
+
+test('respects the delivery preference already selected during onboarding', () => {
+  const contract = feedbackPlacementContract(
+    {
+      id: 'feature-123',
+      name: 'Suggest a Feature',
+      type: 'custom',
+      prompt: 'What should we build?',
+      slack_channel_id: null,
+    },
+    'Settings',
+    'user_tap',
+    'created',
+    { status: 'deferred', required: false }
+  );
+
+  assert.equal(contract.completion_requirements.slack_channel_assigned_when_selected, false);
+  assert.ok(contract.agent_actions.some((action) => action.includes('delivery preference already selected')));
 });

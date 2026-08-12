@@ -6,11 +6,11 @@
 
 MCP Registry name: `io.github.Paydirt-AI/paydirt-mcp`
 
-The agent-native installer and control plane for [Paydirt](https://www.paydirt.ai), an iOS SDK for regular feedback, trial cancellation, and subscription cancellation.
+The agent-native installer and control plane for [Paydirt](https://www.paydirt.ai), an iOS SDK for Suggest a Feature, trial cancellation, and subscription cancellation.
 
-Paydirt MCP lets a coding agent create forms, place them in an iOS app, connect Slack, build and launch the host app, leave a Debug-only test form open for immediate verification, and read raw feedback. Paydirt supports native StoreKit, RevenueCat, Superwall, app-owned billing, and apps without subscriptions.
+Paydirt MCP lets a coding agent create forms, place them in an iOS app, connect Slack, build and launch the host app, leave a Debug-only three-form setup check open for immediate verification, and read raw feedback. Paydirt supports native StoreKit, RevenueCat, Superwall, app-owned billing, and apps without subscriptions.
 
-A generic installation creates regular feedback plus both trial and paid subscription cancellation. The single browser setup handles Google sign-in and Slack OAuth, creates a new `#paydirt-cancellation-feedback` channel, and assigns every installed form before installation begins. If that name is taken, Paydirt creates the next numbered name.
+A generic installation first confirms cancellation feedback and Suggest a Feature, then creates the selected forms after Google sign-in. Browser onboarding asks whether completed feedback should go to Slack and coding agents (recommended), Slack only, or coding agents only. The agent then builds and opens the three-test setup check on a simulator or connected iPhone.
 
 ## Install in Codex
 
@@ -20,7 +20,7 @@ codex mcp add paydirt -- npx -y paydirt-mcp@latest
 
 Restart Codex after adding the server. Then ask:
 
-> Install Paydirt in this iOS app for regular feedback, trial cancellation, and subscription cancellation. Detect the existing subscription setup, preserve any existing feedback form and its behavior, connect every Paydirt form to my Slack feedback channel, edit the app, build it, and give me an exact test path.
+> Add Paydirt and show me it working.
 
 To remove the server later:
 
@@ -62,13 +62,20 @@ Requires Node.js 18 or newer.
 
 Authentication is an explicit, headless-safe two-step flow:
 
-1. The agent calls `paydirt_begin_setup`. It immediately receives an `authorization_url`, `session_id`, and exact `finish_arguments`. The MCP process never launches a browser, sleeps, or polls.
-2. Open `authorization_url` in any browser, sign in to Paydirt with Google, and authorize Slack. Paydirt creates the app, forms, and feedback channel automatically.
-3. The agent calls `paydirt_finish_setup` with the returned arguments. A pending call returns immediately; call it again only after authorization is complete.
+1. The agent inspects the app and calls `paydirt_begin_setup` without confirmation to receive the recommended form plan, then asks the developer to approve Add all three, Add both cancellation forms, or Customize. An explicit request naming the forms already counts as confirmation.
+2. After confirmation, the agent calls `paydirt_begin_setup` with `form_plan_confirmed: true`. It immediately receives an `authorization_url`, `session_id`, and exact `finish_arguments`. The MCP process never launches a browser, sleeps, or polls.
+3. Open `authorization_url` in any browser and sign in to Paydirt with Google. Paydirt creates the app and selected forms, then asks for Slack and coding agents (recommended), Slack only, or coding agents only.
+4. When Slack is selected, complete Slack OAuth. Paydirt provisions `#paydirt-suggest-a-feature` and `#paydirt-cancellations`, assigns the corresponding forms, and verifies the routing before setup completes.
+5. The agent calls `paydirt_finish_setup`, respects the saved delivery choice, installs Paydirt, builds and launches the app, and leaves the three-test setup check visibly open. The developer submits all three tests; Slack setup is complete only when 3/3 reach the expected channels.
+6. The coding-agent delivery choices disclose and include a read-only daily brief. After verification, a host with native scheduling creates a 9:00 AM local task that calls `paydirt_get_feedback_digest`; unsupported hosts return the reusable prompt and report the limitation without pretending a schedule was created. Slack-only delivery does not include it.
 
 `paydirt_setup` remains as a compatibility alias: call it without `session_id` to begin and with `session_id` to finish.
 
 Credentials are saved locally at `~/.paydirt/credentials.json` with owner-only permissions. They are not written to an app repository or sent anywhere except `api.paydirt.ai`. For ephemeral environments, set `PAYDIRT_AUTH_TOKEN` instead.
+
+## Daily feedback brief
+
+`paydirt_get_feedback_digest` returns a read-only period summary designed for scheduled tasks: total completed responses, Suggest a Feature, Trial Cancellation, Subscription Cancellation, other feedback, the change from the preceding equal period, and concise highlights. A quiet day explicitly reports zero. Digests never create coding tasks or modify an app automatically.
 
 ## Natural agent workflows
 

@@ -55,6 +55,7 @@ export function feedbackPlacementContract(
   slack: Record<string, unknown>
 ) {
   const presentationStatement = `Paydirt.presentForm(formId: "${swiftString(form.id)}", metadata: ["paydirt_placement": "${swiftString(placement)}"])`;
+  const slackRequired = slack.status !== 'deferred';
 
   return {
     success: true,
@@ -82,15 +83,19 @@ export function feedbackPlacementContract(
       'Ensure Paydirt is installed and configured. If it is not, use paydirt_begin_setup and paydirt_finish_setup, then perform every returned installation action first.',
       `Edit the host app so this exact statement runs at the requested trigger: ${presentationStatement}`,
       triggerInstruction(trigger, placement),
-      'Connect Slack if needed, resolve the requested channel, assign it to this form, and verify the form has a Slack channel ID.',
+      slackRequired
+        ? 'Connect Slack if needed, resolve the requested channel, assign it to this form, and verify the form has a Slack channel ID.'
+        : 'Use the delivery preference already selected during browser onboarding. Do not ask again unless the developer requests a change.',
       'Resolve dependencies and build the real host-app target. Do not report completion from a snippet or remote-form creation alone.',
-      'Test the requested placement/action, submit a response, and verify one Slack message contains the raw question and exact answer.',
-      'Report the host files changed, form ID, placement wired, Slack channel assignment, build command/result, and exact manual test path.',
+      slackRequired
+        ? 'Test the requested placement/action, submit a response, and verify one Slack message contains the raw question and exact answer.'
+        : 'Test the requested placement/action and leave the form visible without submitting it for the developer.',
+      'Report the host files changed, form ID, placement wired, selected delivery route, build command/result, and exact manual test path.',
     ],
     completion_requirements: {
       host_app_edited: true,
       exact_placement_wired: true,
-      slack_channel_assigned: true,
+      slack_channel_assigned_when_selected: slackRequired,
       host_app_build_passed: true,
       placement_test_path_reported: true,
     },

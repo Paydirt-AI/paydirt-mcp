@@ -72,24 +72,47 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   });
   client.notify('notifications/initialized');
 
-  const startedAt = Date.now();
-  const begin = toolJson(await client.request('tools/call', {
+  const confirmation = toolJson(await client.request('tools/call', {
     name: 'paydirt_begin_setup',
     arguments: {
       app_name: 'Example',
       bundle_id: 'com.example.app',
+      subscription_provider: 'revenuecat',
+    },
+  }));
+  assert.equal(confirmation.status, 'confirmation_required');
+  assert.equal(confirmation.confirmation.recommended, 'add_both');
+  assert.match(confirmation.message, /Add all three and show them working/);
+  assert.equal(confirmation.confirmation.options[0].label, 'Add all three');
+  assert.deepEqual(confirmation.confirmation.options.map((option) => option.id), ['add_both', 'cancellation_only', 'customize']);
+
+  const noSubscriptionConfirmation = toolJson(await client.request('tools/call', {
+    name: 'paydirt_begin_setup',
+    arguments: {
+      app_name: 'No Subscription App',
+      bundle_id: 'com.example.free',
       subscription_provider: 'none',
     },
+  }));
+  assert.equal(noSubscriptionConfirmation.status, 'confirmation_required');
+  assert.equal(noSubscriptionConfirmation.confirmation.recommended, 'suggest_feature_only');
+  assert.match(noSubscriptionConfirmation.message, /cancellation feedback would not have a real trigger/);
+  assert.deepEqual(noSubscriptionConfirmation.next_arguments.use_cases, ['feature_request']);
+
+  const startedAt = Date.now();
+  const begin = toolJson(await client.request('tools/call', {
+    name: 'paydirt_begin_setup',
+    arguments: confirmation.next_arguments,
   }));
   assert.ok(Date.now() - startedAt < 2_000, 'begin setup should return immediately');
   assert.equal(begin.status, 'authorization_required');
   assert.equal(begin.session_id, 'setup-session');
   assert.match(begin.authorization_url, /^https:\/\/www\.paydirt\.ai\/setup\?/);
   const authorizationUrl = new URL(begin.authorization_url);
-  assert.equal(authorizationUrl.searchParams.get('required_forms'), 'custom,trial_expiration,cancellation');
+  assert.equal(authorizationUrl.searchParams.get('required_forms'), 'feature_request,trial_expiration,cancellation');
   assert.equal(begin.finish_arguments.session_id, 'setup-session');
   assert.equal(begin.finish_arguments.bundle_id, 'com.example.app');
-  assert.deepEqual(begin.finish_arguments.use_cases, undefined);
+  assert.deepEqual(begin.finish_arguments.use_cases, ['feature_request', 'trial_cancellation', 'subscription_cancellation']);
 
   const pending = toolJson(await client.request('tools/call', {
     name: 'paydirt_finish_setup',
@@ -103,24 +126,47 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   }));
   assert.equal(ready.status, 'ready');
   assert.equal(ready.installation.app_id, 'app-123');
-  assert.equal(ready.installation.ios.subscription.provider, 'none');
-  assert.deepEqual(ready.installation.use_cases, ['regular_feedback', 'trial_cancellation', 'subscription_cancellation']);
-  assert.match(ready.installation.ios.regular_feedback_trigger, /feedback-123/);
-  assert.equal(ready.installation.ios.install_verification.form_id, 'feedback-123');
-  assert.match(ready.installation.ios.install_verification.presentation, /paydirt_install_test/);
+  assert.equal(ready.installation.ios.subscription.provider, 'revenuecat');
+  assert.deepEqual(ready.installation.use_cases, ['feature_request', 'trial_cancellation', 'subscription_cancellation']);
+  assert.match(ready.installation.ios.regular_feedback_trigger, /feature-123/);
+  assert.equal(ready.installation.ios.feature_request_placement.requested_placement, 'settings');
+  assert.equal(ready.installation.ios.install_verification.mode, 'three_form_setup_check');
+  assert.equal(ready.installation.ios.install_verification.form_id, 'feature-123');
+  assert.equal(ready.installation.ios.install_verification.tests.length, 3);
+  assert.deepEqual(
+    ready.installation.ios.install_verification.tests.map((item) => item.label),
+    ['Suggest a Feature', 'Trial Cancellation', 'Subscription Cancellation']
+  );
+  assert.match(ready.installation.ios.install_verification.presentation, /presentSetupCheck/);
+  assert.match(ready.installation.ios.install_verification.presentation, /requiresSlackDelivery: true/);
   assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /#if DEBUG/);
   assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /UserDefaults/);
-  assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /feedback-123/);
+  assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /feature-123/);
   assert.match(ready.installation.ios.install_verification.repeat_test_reset, /removeObject/);
-  assert.match(ready.installation.ios.install_verification.behavior, /DEBUG-only one-time/);
+  assert.match(ready.installation.ios.install_verification.behavior, /3\/3 delivered/);
   assert.match(ready.installation.host_app_preservation.existing_feedback_ui, /Do not replace/);
   assert.ok(ready.installation.agent_actions.some((action) => action.includes('preserving all existing feedback behavior')));
-  assert.ok(ready.installation.agent_actions.some((action) => action.includes('leave the Paydirt form visibly open')));
-  assert.ok(ready.installation.agent_actions.some((action) => action.includes('#paydirt-cancellation-feedback')));
+  assert.ok(ready.installation.agent_actions.some((action) => action.includes('leave the Paydirt setup check visibly open')));
+  assert.ok(ready.installation.agent_actions.some((action) => action.includes('Verify the Slack status returned by onboarding')));
+  assert.equal(ready.installation.delivery.recommended, 'both');
+  assert.equal(ready.installation.delivery.selected, 'both');
+  assert.deepEqual(ready.installation.delivery.options.map((option) => option.id), ['both', 'slack', 'agents']);
   assert.equal(ready.installation.slack.connected_during_setup, true);
-  assert.match(ready.installation.slack.default, /created a new public/);
-  assert.equal(ready.installation.completion_requirements.install_test_form_visible, true);
+  assert.equal(ready.installation.slack.required_for_setup, true);
+  assert.equal(ready.installation.slack.feature_channel.name, 'paydirt-suggest-a-feature');
+  assert.equal(ready.installation.slack.cancellation_channel.name, 'paydirt-cancellations');
+  assert.equal(ready.installation.slack.all_forms_assigned, true);
+  assert.equal(ready.installation.completion_requirements.install_test_setup_visible, true);
+  assert.equal(ready.installation.completion_requirements.required_test_submissions, 3);
+  assert.equal(ready.installation.completion_requirements.test_deliveries_verified, true);
   assert.equal(ready.installation.completion_requirements.automatic_test_trigger_debug_only, true);
+  assert.equal(ready.installation.completion_requirements.delivery_preference_confirmed_during_onboarding, true);
+  assert.equal(ready.installation.daily_brief.included_with_coding_agent_delivery, true);
+  assert.equal(ready.installation.daily_brief.eligible, true);
+  assert.equal(ready.installation.daily_brief.create_after_delivery_tests_pass, true);
+  assert.match(ready.installation.daily_brief.selection_disclosure, /includes this read-only daily brief/);
+  assert.match(ready.installation.daily_brief.task_prompt, /paydirt_get_feedback_digest/);
+  assert.match(ready.installation.daily_brief.task_prompt, /No new Paydirt feedback/);
 
   const explicitFeedback = toolJson(await client.request('tools/call', {
     name: 'paydirt_begin_setup',
@@ -128,6 +174,7 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
       app_name: 'Example',
       bundle_id: 'com.example.app',
       use_cases: ['regular_feedback'],
+      form_plan_confirmed: true,
       subscription_provider: 'none',
     },
   }));

@@ -45,6 +45,7 @@ export interface App {
   app_description: string | null;
   system_prompt?: string | null;
   app_context_prompt?: string | null;
+  feedback_delivery_preference?: 'unconfigured' | 'both' | 'slack' | 'agents';
   created_at: string;
 }
 
@@ -83,6 +84,29 @@ export interface Summary {
   top_reasons: string[];
   response_count: number;
   period: string;
+}
+
+export interface FeedbackDigest {
+  app_id: string;
+  period: { hours: number; since: string; until: string };
+  counts: {
+    total: number;
+    feature_suggestions: number;
+    trial_cancellations: number;
+    subscription_cancellations: number;
+    other_feedback: number;
+  };
+  previous_period_total: number;
+  change_from_previous_period: number;
+  truncated: boolean;
+  items: Array<{
+    response_id: string;
+    form_id: string;
+    form_name: string;
+    category: 'feature_suggestion' | 'trial_cancellation' | 'subscription_cancellation' | 'other_feedback';
+    highlight: string;
+    completed_at: string;
+  }>;
 }
 
 // Slack types
@@ -171,6 +195,69 @@ export async function getSummary(
   if (params.toString()) endpoint += `?${params.toString()}`;
 
   return apiRequest<Summary>(endpoint, { token });
+}
+
+export async function getFeedbackDigest(
+  token: string,
+  appId: string,
+  hours: number = 24
+): Promise<FeedbackDigest> {
+  const safeHours = Number.isFinite(hours) ? Math.min(168, Math.max(1, Math.round(hours))) : 24;
+  const until = new Date();
+  const since = new Date(until.getTime() - safeHours * 60 * 60 * 1000);
+  const previousSince = new Date(since.getTime() - safeHours * 60 * 60 * 1000);
+  const [forms, responses] = await Promise.all([
+    listForms(token, appId),
+    getResponses(token, appId, {
+      status: 'completed',
+      since: previousSince.toISOString(),
+      limit: 100,
+    }),
+  ]);
+  const formsById = new Map(forms.map((form) => [form.id, form]));
+  const categoryFor = (formId: string): FeedbackDigest['items'][number]['category'] => {
+    const type = formsById.get(formId)?.type;
+    if (type === 'feature_request') return 'feature_suggestion';
+    if (type === 'trial_expiration') return 'trial_cancellation';
+    if (type === 'cancellation') return 'subscription_cancellation';
+    return 'other_feedback';
+  };
+  const completedAt = (response: Response) => response.completed_at || response.updated_at || response.created_at;
+  const current = responses.filter((response) => new Date(completedAt(response)).getTime() >= since.getTime());
+  const previous = responses.filter((response) => {
+    const time = new Date(completedAt(response)).getTime();
+    return time >= previousSince.getTime() && time < since.getTime();
+  });
+  const counts = {
+    total: current.length,
+    feature_suggestions: current.filter((response) => categoryFor(response.form_id) === 'feature_suggestion').length,
+    trial_cancellations: current.filter((response) => categoryFor(response.form_id) === 'trial_cancellation').length,
+    subscription_cancellations: current.filter((response) => categoryFor(response.form_id) === 'subscription_cancellation').length,
+    other_feedback: current.filter((response) => categoryFor(response.form_id) === 'other_feedback').length,
+  };
+
+  return {
+    app_id: appId,
+    period: { hours: safeHours, since: since.toISOString(), until: until.toISOString() },
+    counts,
+    previous_period_total: previous.length,
+    change_from_previous_period: current.length - previous.length,
+    truncated: responses.length === 100,
+    items: current.map((response) => {
+      const form = formsById.get(response.form_id);
+      const latestUserAnswer = [...response.conversation]
+        .reverse()
+        .find((message) => message.role === 'user' && message.content.trim())?.content;
+      return {
+        response_id: response.id,
+        form_id: response.form_id,
+        form_name: form?.name || 'Feedback',
+        category: categoryFor(response.form_id),
+        highlight: response.ai_summary?.trim() || latestUserAnswer?.trim() || 'Completed feedback received',
+        completed_at: completedAt(response),
+      };
+    }),
+  };
 }
 
 export async function getSlackInstallUrl(token: string, appId: string): Promise<{ auth_url: string }> {
@@ -272,6 +359,15 @@ export async function getSlackStatus(
   form_count: number;
   assigned_form_count: number;
   all_forms_assigned: boolean;
+  feature_channel_id: string | null;
+  feature_channel_name: string | null;
+  cancellation_channel_id: string | null;
+  cancellation_channel_name: string | null;
+  two_channel_routing: boolean;
+  assignments: {
+    feature: { assigned: number; total: number; complete: boolean };
+    cancellation: { assigned: number; total: number; complete: boolean };
+  };
 }> {
   return apiRequest<{
     connected: boolean;
@@ -281,6 +377,15 @@ export async function getSlackStatus(
     form_count: number;
     assigned_form_count: number;
     all_forms_assigned: boolean;
+    feature_channel_id: string | null;
+    feature_channel_name: string | null;
+    cancellation_channel_id: string | null;
+    cancellation_channel_name: string | null;
+    two_channel_routing: boolean;
+    assignments: {
+      feature: { assigned: number; total: number; complete: boolean };
+      cancellation: { assigned: number; total: number; complete: boolean };
+    };
   }>(
     `/api/slack/${appId}/status`,
     { token }
@@ -312,6 +417,7 @@ export interface SetupStatus {
   auth_token?: string;
   app_id?: string;
   action?: 'created' | 'reused' | 'repaired';
+  delivery_preference?: 'both' | 'slack' | 'agents';
   forms?: Array<{
     id: string;
     type: Form['type'];
