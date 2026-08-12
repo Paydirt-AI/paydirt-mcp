@@ -1,5 +1,7 @@
 // API client for Paydirt backend
 
+import { PAYDIRT_MCP_USER_AGENT, PAYDIRT_MCP_VERSION } from './version.js';
+
 const API_BASE_URL = process.env.PAYDIRT_API_URL || 'https://api.paydirt.ai';
 
 interface ApiOptions {
@@ -16,6 +18,8 @@ export async function apiRequest<T>(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'User-Agent': PAYDIRT_MCP_USER_AGENT,
+    'X-Paydirt-MCP-Version': PAYDIRT_MCP_VERSION,
   };
 
   if (token) {
@@ -113,6 +117,16 @@ export interface FeedbackDigest {
 export interface SlackChannel {
   id: string;
   name: string;
+}
+
+export interface McpVersionPolicy {
+  installed_version: string | null;
+  latest_version: string;
+  minimum_supported_version: string;
+  update_available: boolean | null;
+  update_required: boolean | null;
+  status: 'current' | 'update_recommended' | 'update_required' | 'unknown';
+  update_action: string | null;
 }
 
 // API functions
@@ -304,13 +318,56 @@ export async function updateForm(
 // New API functions
 
 // Health check - verify API connectivity
-export async function healthCheck(token: string): Promise<{ status: string; authenticated: boolean }> {
+export async function getMcpVersionPolicy(): Promise<McpVersionPolicy> {
+  return apiRequest<McpVersionPolicy>(
+    `/api/mcp/version-policy?installed_version=${encodeURIComponent(PAYDIRT_MCP_VERSION)}`
+  );
+}
+
+export async function healthCheck(token: string): Promise<{
+  status: string;
+  authenticated: boolean;
+  installed_version: string;
+  latest_version: string | null;
+  minimum_supported_version: string | null;
+  update_available: boolean | null;
+  update_required: boolean | null;
+  update_status: McpVersionPolicy['status'];
+  update_action: string | null;
+}> {
+  let authenticated = false;
   try {
-    // Try to list apps to verify authentication
     await listApps(token);
-    return { status: 'ok', authenticated: true };
+    authenticated = true;
   } catch {
-    return { status: 'error', authenticated: false };
+    authenticated = false;
+  }
+
+  try {
+    const policy = await getMcpVersionPolicy();
+    return {
+      status: authenticated ? 'ok' : 'error',
+      authenticated,
+      installed_version: PAYDIRT_MCP_VERSION,
+      latest_version: policy.latest_version,
+      minimum_supported_version: policy.minimum_supported_version,
+      update_available: policy.update_available,
+      update_required: policy.update_required,
+      update_status: policy.status,
+      update_action: policy.update_action,
+    };
+  } catch {
+    return {
+      status: authenticated ? 'ok' : 'error',
+      authenticated,
+      installed_version: PAYDIRT_MCP_VERSION,
+      latest_version: null,
+      minimum_supported_version: null,
+      update_available: null,
+      update_required: null,
+      update_status: 'unknown',
+      update_action: null,
+    };
   }
 }
 

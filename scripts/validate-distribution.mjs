@@ -27,7 +27,7 @@ const claudeEntry = claudeMarketplace.plugins.find((plugin) => plugin.name === '
 assert.ok(claudeEntry, 'Claude marketplace must include Paydirt');
 assert.equal(claudeEntry.version, claudePlugin.version);
 assert.equal(claudePlugin.version, packageJson.version);
-assert.deepEqual(claudeMcp.paydirt.args, ['-y', `paydirt-mcp@${packageJson.version}`]);
+assert.deepEqual(claudeMcp.paydirt.args, ['--yes', '--prefer-online', `paydirt-mcp@${packageJson.version}`]);
 
 assert.equal(openAiPlugin.name, 'paydirt');
 assert.equal(openAiPlugin.version, packageJson.version);

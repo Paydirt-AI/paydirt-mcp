@@ -15,7 +15,7 @@ A generic installation first confirms cancellation feedback and Suggest a Featur
 ## Install in Codex
 
 ```bash
-codex mcp add paydirt -- npx -y paydirt-mcp@latest
+codex mcp add paydirt -- npx --yes --prefer-online paydirt-mcp@latest
 ```
 
 Restart Codex after adding the server. Then ask:
@@ -31,7 +31,7 @@ codex mcp remove paydirt
 ## Install in Claude Code
 
 ```bash
-claude mcp add paydirt -- npx -y paydirt-mcp@latest
+claude mcp add paydirt -- npx --yes --prefer-online paydirt-mcp@latest
 ```
 
 The public Paydirt Claude plugin marketplace is also included in this repository. After the public repository is available:
@@ -50,7 +50,7 @@ Other MCP hosts can launch the same stdio command:
   "mcpServers": {
     "paydirt": {
       "command": "npx",
-      "args": ["-y", "paydirt-mcp@latest"]
+      "args": ["--yes", "--prefer-online", "paydirt-mcp@latest"]
     }
   }
 }

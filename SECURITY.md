@@ -21,4 +21,4 @@ Do not commit `.paydirt`, `credentials.json`, `.env`, npm tokens, Slack tokens, 
 
 ## Supported versions
 
-Security fixes are applied to the current npm release. Upgrade with `npx -y paydirt-mcp@latest` or restart an MCP host configured with that command.
+Security fixes are applied to the current npm release. Upgrade with `npx --yes --prefer-online paydirt-mcp@latest` or restart an MCP host configured with that command.
