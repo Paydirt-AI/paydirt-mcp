@@ -9,7 +9,7 @@
     {
       "name": "paydirt",
       "description": "Install and operate Paydirt feedback, cancellation, and Slack workflows in iOS apps",
-      "version": "2.3.1",
+      "version": "2.4.0",
       "author": {
         "name": "Paydirt"
       },

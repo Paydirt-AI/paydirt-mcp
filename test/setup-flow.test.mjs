@@ -55,7 +55,7 @@ function toolJson(response) {
   return JSON.parse(response.result.content[0].text);
 }
 
-test('setup is a non-blocking begin/finish flow and stores credentials owner-only', async (t) => {
+test('setup completes in one MCP process without a restart and stores credentials owner-only', async (t) => {
   const fakeHome = await mkdtemp(join(tmpdir(), 'paydirt-mcp-test-'));
   const child = spawn(process.execPath, ['--import', './test/setup-mock-fetch.mjs', 'dist/index.js'], {
     cwd: new URL('..', import.meta.url),
@@ -75,6 +75,7 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   const confirmation = toolJson(await client.request('tools/call', {
     name: 'paydirt_begin_setup',
     arguments: {
+      app_id: 'app-123',
       app_name: 'Example',
       bundle_id: 'com.example.app',
       subscription_provider: 'revenuecat',
@@ -111,6 +112,8 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   const authorizationUrl = new URL(begin.authorization_url);
   assert.equal(authorizationUrl.searchParams.get('required_forms'), 'feature_request,trial_expiration,cancellation');
   assert.equal(begin.finish_arguments.session_id, 'setup-session');
+  assert.equal(authorizationUrl.searchParams.get('app_id'), 'app-123');
+  assert.equal(begin.finish_arguments.app_id, 'app-123');
   assert.equal(begin.finish_arguments.bundle_id, 'com.example.app');
   assert.deepEqual(begin.finish_arguments.use_cases, ['feature_request', 'trial_cancellation', 'subscription_cancellation']);
 
@@ -119,6 +122,15 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
     arguments: begin.finish_arguments,
   }));
   assert.equal(pending.status, 'pending');
+
+  const wrongApp = await client.request('tools/call', {
+    name: 'paydirt_finish_setup',
+    arguments: { ...begin.finish_arguments, app_id: 'another-app' },
+  });
+  assert.equal(toolJson(wrongApp).status, 'error');
+  assert.equal(toolJson(wrongApp).success, false);
+  assert.match(wrongApp.result.content[0].text, /different app/);
+  await assert.rejects(readFile(join(fakeHome, '.paydirt', 'credentials.json')), { code: 'ENOENT' });
 
   const ready = toolJson(await client.request('tools/call', {
     name: 'paydirt_finish_setup',
@@ -130,7 +142,7 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   assert.deepEqual(ready.installation.use_cases, ['feature_request', 'trial_cancellation', 'subscription_cancellation']);
   assert.match(ready.installation.ios.regular_feedback_trigger, /feature-123/);
   assert.equal(ready.installation.ios.feature_request_placement.requested_placement, 'settings');
-  assert.equal(ready.installation.ios.install_verification.mode, 'three_form_setup_check');
+  assert.equal(ready.installation.ios.install_verification.mode, 'requested_forms_setup_check');
   assert.equal(ready.installation.ios.install_verification.form_id, 'feature-123');
   assert.equal(ready.installation.ios.install_verification.tests.length, 3);
   assert.deepEqual(
@@ -188,3 +200,42 @@ test('setup is a non-blocking begin/finish flow and stores credentials owner-onl
   assert.equal((await stat(join(fakeHome, '.paydirt'))).mode & 0o777, 0o700);
   assert.equal((await stat(credentialPath)).mode & 0o777, 0o600);
 });
+
+for (const [name, useCases, formIds, delivery] of [
+  ['both cancellations', ['trial_cancellation', 'subscription_cancellation'], ['trial-123', 'subscription-123'], 'both'],
+  ['one feature form', ['feature_request'], ['feature-123'], 'agents'],
+]) {
+  test(`setup verifies every requested form for ${name} without marking completion before delivery`, async (t) => {
+    const fakeHome = await mkdtemp(join(tmpdir(), 'paydirt-mcp-subset-'));
+    const child = spawn(process.execPath, ['--import', './test/setup-mock-fetch.mjs', 'dist/index.js'], {
+      cwd: new URL('..', import.meta.url),
+      env: { ...process.env, HOME: fakeHome, PAYDIRT_API_URL: 'https://mock.paydirt.invalid', PAYDIRT_AUTH_TOKEN: '', TEST_FORM_IDS: formIds.join(','), TEST_DELIVERY: delivery },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    t.after(() => child.kill());
+    const client = mcpClient(child);
+    await client.request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'subset-test', version: '1' } });
+    client.notify('notifications/initialized');
+    const args = { session_id: 'setup-session', app_id: 'app-123', use_cases: useCases, subscription_provider: 'revenuecat' };
+    assert.equal(toolJson(await client.request('tools/call', { name: 'paydirt_finish_setup', arguments: args })).status, 'pending');
+    const result = toolJson(await client.request('tools/call', { name: 'paydirt_finish_setup', arguments: args }));
+    const check = result.installation.ios.install_verification;
+    assert.deepEqual(check.tests.map((item) => item.form_id), formIds);
+    assert.equal(result.installation.completion_requirements.required_test_submissions, formIds.length);
+    assert.equal(result.installation.ios.minimum_version, '2.2.0');
+    for (const id of formIds) assert.ok(check.presentation.includes(id));
+    assert.match(check.presentation, /PaydirtSetupCheckForm/);
+    assert.ok(check.presentation.includes(`requiresSlackDelivery: ${delivery !== 'agents'}`));
+    assert.doesNotMatch(check.app_ready_body_snippet, /standard\.set\(true/);
+    assert.match(check.behavior, /does not prove the real subscription cancellation trigger/);
+    if (delivery === 'agents') {
+      const incomplete = toolJson(await client.request('tools/call', {
+        name: 'paydirt_finish_setup',
+        arguments: { ...args, use_cases: ['feature_request', 'trial_cancellation'] },
+      }));
+      assert.equal(incomplete.status, 'error');
+      assert.match(incomplete.message, /without requested forms: trial_expiration/);
+    }
+
+  });
+}

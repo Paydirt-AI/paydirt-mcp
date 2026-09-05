@@ -16,12 +16,12 @@ globalThis.fetch = async (input, options = {}) => {
           api_key: 'public-sdk-key',
           app_id: 'app-123',
           action: 'created',
-          delivery_preference: 'both',
+          delivery_preference: process.env.TEST_DELIVERY || 'both',
           forms: [
             { id: 'feature-123', type: 'feature_request', name: 'Suggest a Feature', created: true },
             { id: 'subscription-123', type: 'cancellation', name: 'Cancellation Feedback', created: true },
             { id: 'trial-123', type: 'trial_expiration', name: 'Trial Cancellation Feedback', created: true },
-          ],
+          ].filter((form) => !process.env.TEST_FORM_IDS || process.env.TEST_FORM_IDS.split(',').includes(form.id)),
         };
   } else if (url.endsWith('/api/slack/app-123/status')) {
     body = {

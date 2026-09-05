@@ -1,7 +1,7 @@
 {
   "name": "paydirt",
-  "version": "2.3.1",
-  "description": "Install and operate Paydirt feedback workflows in iOS apps",
+  "version": "2.4.0",
+  "description": "Install voice cancellation feedback for iOS with RevenueCat and Slack",
   "author": {
     "name": "Paydirt",
     "url": "https://www.paydirt.ai"
@@ -9,12 +9,12 @@
   "homepage": "https://www.paydirt.ai/docs#agent-installation",
   "repository": "https://github.com/Paydirt-AI/paydirt-mcp",
   "license": "MIT",
-  "keywords": ["ios", "feedback", "subscriptions", "slack", "mcp"],
+  "keywords": ["ios", "feedback", "subscriptions", "voice", "revenuecat", "slack", "mcp"],
   "skills": "./skills/",
   "interface": {
     "displayName": "Paydirt",
-    "shortDescription": "Install iOS feedback with Slack delivery.",
-    "longDescription": "Add regular feedback, trial cancellation, and subscription cancellation conversations to iOS apps, then deliver exact raw responses to Slack and coding agents.",
+    "shortDescription": "Install voice feedback with Slack delivery.",
+    "longDescription": "Add voice Suggest a Feature, trial cancellation, and subscription cancellation forms to iOS apps using RevenueCat or StoreKit; deliver completed Q&A to Slack and coding agents.",
     "developerName": "Paydirt",
     "category": "Productivity",
     "capabilities": ["Interactive", "Write"],
