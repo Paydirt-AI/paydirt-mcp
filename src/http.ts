@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { randomUUID } from 'node:crypto';
+import { randomUUID, webcrypto } from 'node:crypto';
 import type { Server as HttpServer } from 'node:http';
 import { requireBearerAuth } from '@modelcontextprotocol/sdk/server/auth/middleware/bearerAuth.js';
 import type { OAuthServerProvider } from '@modelcontextprotocol/sdk/server/auth/provider.js';
@@ -19,6 +19,13 @@ import {
 } from './server.js';
 
 import { PAYDIRT_MCP_VERSION as VERSION } from './version.js';
+
+// Node 18 provides WebCrypto through node:crypto, but does not enable its global
+// by default. The MCP HTTP transport uses that global for session identifiers.
+if (!globalThis.crypto) {
+  Object.defineProperty(globalThis, 'crypto', { value: webcrypto, configurable: true });
+}
+
 const MANAGE_SCOPE = 'paydirt:manage';
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://chatgpt.com',
