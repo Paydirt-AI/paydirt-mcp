@@ -2,7 +2,9 @@
 
 import { PAYDIRT_MCP_USER_AGENT, PAYDIRT_MCP_VERSION } from './version.js';
 
-const API_BASE_URL = process.env.PAYDIRT_API_URL || 'https://api.paydirt.ai';
+function apiBaseUrl(): string {
+  return process.env.PAYDIRT_API_URL || 'https://api.paydirt.ai';
+}
 
 interface ApiOptions {
   method?: string;
@@ -26,7 +28,7 @@ export async function apiRequest<T>(
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetch(`${apiBaseUrl()}${endpoint}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
@@ -481,6 +483,34 @@ export interface SetupStatus {
     name: string;
     created: boolean;
   }>;
+}
+
+export interface EnsureReadyResult {
+  app: App;
+  action: 'created' | 'reused' | 'repaired';
+  forms: Array<{
+    id: string;
+    type: Form['type'];
+    name: string;
+    created: boolean;
+  }>;
+}
+
+export async function ensureReadySetup(
+  token: string,
+  data: {
+    app_id?: string;
+    bundle_id?: string;
+    app_name?: string;
+    app_description?: string;
+    required_forms: string[];
+  }
+): Promise<EnsureReadyResult> {
+  return apiRequest<EnsureReadyResult>('/api/setup/ensure-ready', {
+    method: 'POST',
+    body: data,
+    token,
+  });
 }
 
 // Start a setup session (no auth required)

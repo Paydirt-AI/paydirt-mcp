@@ -2,6 +2,16 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.4.0 - 2026-09-04
+
+- Resume website-started onboarding with the exact app ID and reject a mismatched authorization result before saving credentials.
+- Describe voice cancellation feedback, RevenueCat, Slack, and explicit installation intent consistently to agents.
+- Verify every requested form, including cancellation-only and single-form installations, using Paydirt iOS 2.2.0 setup checks; save completion only after verified delivery.
+- Respect customer-selected Slack channels and require completed Q&A rather than cancellation-only notifications.
+- Preserve released MCP version headers, version-policy health results, and update guidance.
+- Unify stdio and hosted HTTP release sources while retaining OAuth grant and per-session credential isolation.
+- Update compatible runtime dependencies to resolve the verified fast-uri, Hono, and qs advisories.
+
 ## 2.3.1 - 2026-08-12
 
 - Report the running MCP package version to the Paydirt API and through the
