@@ -34,7 +34,8 @@ function oauthProvider() {
         resource: resourceUrl,
         extra: {
           userId,
-          appId: `app-${userId}`,
+          // A user-scoped grant (spec C1) carries no app.
+          appId: userId.startsWith('scoped-') ? null : `app-${userId}`,
           apiToken: `api-token-${userId}`,
         },
       };
@@ -93,7 +94,7 @@ test('OAuth identity supplies Paydirt credentials and survives a hosted server r
     if (url.endsWith('/api/setup/ensure-ready')) {
       const userId = authorization?.replace('Bearer api-token-', '');
       return Response.json({
-        app: { id: `app-${userId}`, api_key: `public-key-${userId}` },
+        app: { id: `app-${userId}`, api_key: `public-key-${userId}`, feedback_delivery_preference: 'agents' },
         action: 'reused',
         forms: [
           { id: `feature-${userId}`, type: 'feature_request', name: 'Suggest a Feature', created: false },
@@ -338,4 +339,89 @@ test('dynamic client registration is independently rate limited', async (t) => {
   assert.equal(rateLimited?.status, 429);
   assert.ok(rateLimited.headers.get('retry-after'));
   assert.equal((await rateLimited.json()).error, 'temporarily_unavailable');
+});
+
+test('a user-scoped hosted grant creates the app through ensure-ready and keeps it for later tool calls', async (t) => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let preference = 'unconfigured';
+  globalThis.fetch = async (input, init = {}) => {
+    const url = String(input);
+    if (!url.startsWith('https://mock.paydirt.invalid')) return originalFetch(input, init);
+    const { pathname } = new URL(url);
+    const method = init.method || 'GET';
+    const body = init.body ? JSON.parse(init.body) : undefined;
+    calls.push({ method, pathname, body });
+    if (pathname === '/api/setup/ensure-ready') {
+      return Response.json({
+        app: { id: 'app-new', api_key: 'public-key-new', feedback_delivery_preference: preference },
+        action: 'created',
+        forms: [
+          { id: 'feature-new', type: 'feature_request', name: 'Suggest a Feature', created: true },
+          { id: 'trial-new', type: 'trial_expiration', name: 'Trial Cancellation', created: true },
+          { id: 'cancel-new', type: 'cancellation', name: 'Subscription Cancellation', created: true },
+        ],
+      });
+    }
+    if (pathname === '/api/apps/app-new' && method === 'PUT') {
+      preference = body.feedback_delivery_preference;
+      return Response.json({ app: { id: 'app-new', api_key: 'public-key-new', feedback_delivery_preference: preference } });
+    }
+    if (pathname === '/api/slack/app-new/status') {
+      return Response.json({ connected: false, all_forms_assigned: false });
+    }
+    if (pathname === '/api/responses/app/app-new') {
+      return Response.json({ responses: [{ id: 'r1', form_id: 'feature-new', conversation: [{ role: 'user', content: 'Widgets!' }] }] });
+    }
+    return Response.json({ error: 'not found' }, { status: 404 });
+  };
+  process.env.PAYDIRT_API_URL = 'https://mock.paydirt.invalid';
+  const httpServer = await listen(createHostedMcpApp(hostedOptions()));
+  const { client } = await connect(new URL(`http://127.0.0.1:${httpServer.address().port}/mcp`), 'valid-token-scoped-carol');
+  t.after(async () => {
+    globalThis.fetch = originalFetch;
+    delete process.env.PAYDIRT_API_URL;
+    await client.close();
+    httpServer.closeAllConnections();
+    if (httpServer.listening) await close(httpServer);
+  });
+
+  const confirmed = {
+    app_name: 'Carol App',
+    bundle_id: 'com.carol.app',
+    subscription_provider: 'storekit',
+    form_plan_confirmed: true,
+    use_cases: ['feature_request', 'trial_cancellation', 'subscription_cancellation'],
+  };
+  // A user-scoped grant must name the app; it never falls back to the account's most recent app.
+  const unnamed = { ...confirmed, app_name: '  ' };
+  delete unnamed.bundle_id;
+  const needsIdentity = toolJson(await client.callTool({ name: 'paydirt_begin_setup', arguments: unnamed }));
+  assert.equal(needsIdentity.success, false);
+  assert.match(needsIdentity.message, /PRODUCT_BUNDLE_IDENTIFIER/);
+  assert.match(needsIdentity.message, /bundle_id \(and app_name\)/);
+  assert.equal(calls.some((call) => call.pathname === '/api/setup/ensure-ready'), false);
+
+  const needsDelivery = toolJson(await client.callTool({ name: 'paydirt_begin_setup', arguments: confirmed }));
+  assert.equal(needsDelivery.status, 'delivery_selection_required');
+  assert.equal(needsDelivery.app_id, 'app-new');
+  const ensureReady = calls.find((call) => call.pathname === '/api/setup/ensure-ready');
+  assert.equal(ensureReady.body.app_id, undefined, 'user-scoped grants send no app_id');
+  assert.equal(ensureReady.body.bundle_id, 'com.carol.app');
+  assert.equal(calls.some((call) => call.method === 'PUT'), false, 'no destination is assumed');
+
+  const ready = toolJson(await client.callTool({
+    name: 'paydirt_begin_setup',
+    arguments: { ...confirmed, destinations: ['slack', 'claude-code'] },
+  }));
+  assert.equal(ready.status, 'ready');
+  assert.equal(ready.installation.app_id, 'app-new');
+  assert.equal(ready.installation.delivery.selected, 'both');
+  assert.ok(ready.installation.agent_actions.some((action) => action.includes('Slack, in parallel: call paydirt_connect_slack now')));
+  assert.deepEqual(calls.find((call) => call.method === 'PUT').body, { feedback_delivery_preference: 'both' });
+
+  // The next HTTP request re-reads the token; the session must keep the app setup chose.
+  const waited = toolJson(await client.callTool({ name: 'paydirt_wait_for_response', arguments: { timeout_seconds: 5 } }));
+  assert.equal(waited.status, 'received');
+  assert.equal(waited.app_id, 'app-new');
 });

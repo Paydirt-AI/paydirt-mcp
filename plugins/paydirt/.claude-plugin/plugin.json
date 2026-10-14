@@ -1,11 +1,25 @@
 {
   "name": "paydirt",
-  "description": "Install and operate Paydirt feedback, cancellation, and Slack workflows in iOS apps",
-  "version": "2.4.0",
+  "displayName": "Paydirt",
+  "description": "Add voice Subscription Cancellation, Trial Cancellation, and Suggest a Feature forms to iOS apps, with responses in Slack and your coding agent",
+  "version": "2.5.0",
   "author": {
     "name": "Paydirt"
   },
   "homepage": "https://www.paydirt.ai/docs#agent-installation",
   "repository": "https://github.com/Paydirt-AI/paydirt-mcp",
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [
+    "ios",
+    "feedback",
+    "cancellation",
+    "churn",
+    "suggest-a-feature",
+    "subscriptions",
+    "storekit",
+    "revenuecat",
+    "voice",
+    "slack",
+    "mcp"
+  ]
 }

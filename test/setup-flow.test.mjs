@@ -79,11 +79,16 @@ test('setup completes in one MCP process without a restart and stores credential
       app_name: 'Example',
       bundle_id: 'com.example.app',
       subscription_provider: 'revenuecat',
+      cancel_flow_file: 'Example/Settings/ManageSubscriptionView.swift',
     },
   }));
   assert.equal(confirmation.status, 'confirmation_required');
   assert.equal(confirmation.confirmation.recommended, 'add_both');
-  assert.match(confirmation.message, /Add all three and show them working/);
+  assert.match(confirmation.message, /three starting forms: Subscription Cancellation, Trial Cancellation, and Suggest a Feature/);
+  assert.match(confirmation.message, /real cancel flow in Example\/Settings\/ManageSubscriptionView\.swift/);
+  assert.match(confirmation.message, /Slack and here in your coding agent/);
+  assert.match(confirmation.message, /Reply "yes"/);
+  assert.deepEqual(confirmation.confirmation.destination.recommended, ['slack', 'claude-code']);
   assert.equal(confirmation.confirmation.options[0].label, 'Add all three');
   assert.deepEqual(confirmation.confirmation.options.map((option) => option.id), ['add_both', 'cancellation_only', 'customize']);
 
@@ -97,7 +102,8 @@ test('setup completes in one MCP process without a restart and stores credential
   }));
   assert.equal(noSubscriptionConfirmation.status, 'confirmation_required');
   assert.equal(noSubscriptionConfirmation.confirmation.recommended, 'suggest_feature_only');
-  assert.match(noSubscriptionConfirmation.message, /cancellation feedback would not have a real trigger/);
+  assert.match(noSubscriptionConfirmation.message, /cancellation feedback has nothing to trigger it yet/);
+  assert.doesNotMatch(noSubscriptionConfirmation.message, /Subscription Cancellation/);
   assert.deepEqual(noSubscriptionConfirmation.next_arguments.use_cases, ['feature_request']);
 
   const startedAt = Date.now();
@@ -111,6 +117,7 @@ test('setup completes in one MCP process without a restart and stores credential
   assert.match(begin.authorization_url, /^https:\/\/www\.paydirt\.ai\/setup\?/);
   const authorizationUrl = new URL(begin.authorization_url);
   assert.equal(authorizationUrl.searchParams.get('required_forms'), 'feature_request,trial_expiration,cancellation');
+  assert.equal(authorizationUrl.searchParams.get('delivery'), 'chat', 'the website must not treat this client as a legacy hand-off');
   assert.equal(begin.finish_arguments.session_id, 'setup-session');
   assert.equal(authorizationUrl.searchParams.get('app_id'), 'app-123');
   assert.equal(begin.finish_arguments.app_id, 'app-123');
@@ -159,11 +166,15 @@ test('setup completes in one MCP process without a restart and stores credential
   assert.match(ready.installation.host_app_preservation.existing_feedback_ui, /Do not replace/);
   assert.ok(ready.installation.agent_actions.some((action) => action.includes('preserving all existing feedback behavior')));
   assert.ok(ready.installation.agent_actions.some((action) => action.includes('leave the Paydirt setup check visibly open')));
-  assert.ok(ready.installation.agent_actions.some((action) => action.includes('Verify the Slack status returned by onboarding')));
+  assert.ok(ready.installation.agent_actions.some((action) => action.includes('Slack: already connected with every form routed')));
+  const actionIndex = (text) => ready.installation.agent_actions.findIndex((action) => action.includes(text));
+  assert.ok(actionIndex('Write the public SDK key into the project yourself') < actionIndex('opens the Paydirt setup check automatically on first launch'));
+  assert.ok(actionIndex('opens the Paydirt setup check automatically on first launch') < actionIndex('paydirt_wait_for_response'));
+  assert.ok(actionIndex('paydirt_wait_for_response') < actionIndex('Daily brief: offer'));
   assert.equal(ready.installation.delivery.recommended, 'both');
   assert.equal(ready.installation.delivery.selected, 'both');
   assert.deepEqual(ready.installation.delivery.options.map((option) => option.id), ['both', 'slack', 'agents']);
-  assert.equal(ready.installation.slack.connected_during_setup, true);
+  assert.equal(ready.installation.slack.connected, true);
   assert.equal(ready.installation.slack.required_for_setup, true);
   assert.equal(ready.installation.slack.feature_channel.name, 'paydirt-suggest-a-feature');
   assert.equal(ready.installation.slack.cancellation_channel.name, 'paydirt-cancellations');
@@ -172,11 +183,12 @@ test('setup completes in one MCP process without a restart and stores credential
   assert.equal(ready.installation.completion_requirements.required_test_submissions, 3);
   assert.equal(ready.installation.completion_requirements.test_deliveries_verified, true);
   assert.equal(ready.installation.completion_requirements.automatic_test_trigger_debug_only, true);
-  assert.equal(ready.installation.completion_requirements.delivery_preference_confirmed_during_onboarding, true);
+  assert.equal(ready.installation.completion_requirements.delivery_preference_confirmed_in_chat, true);
+  assert.equal(ready.installation.completion_requirements.first_response_received_via_wait_tool, true);
   assert.equal(ready.installation.daily_brief.included_with_coding_agent_delivery, true);
   assert.equal(ready.installation.daily_brief.eligible, true);
-  assert.equal(ready.installation.daily_brief.create_after_delivery_tests_pass, true);
-  assert.match(ready.installation.daily_brief.selection_disclosure, /includes this read-only daily brief/);
+  assert.equal(ready.installation.daily_brief.offer_after_first_response, true);
+  assert.match(ready.installation.daily_brief.selection_disclosure, /optional read-only daily brief/);
   assert.match(ready.installation.daily_brief.task_prompt, /paydirt_get_feedback_digest/);
   assert.match(ready.installation.daily_brief.task_prompt, /No new Paydirt feedback/);
 
@@ -239,3 +251,48 @@ for (const [name, useCases, formIds, delivery] of [
 
   });
 }
+
+test('stdio setup never defaults delivery to agents and resumes after paydirt_set_delivery', async (t) => {
+  const fakeHome = await mkdtemp(join(tmpdir(), 'paydirt-mcp-delivery-'));
+  const child = spawn(process.execPath, ['--import', './test/setup-mock-fetch.mjs', 'dist/index.js'], {
+    cwd: new URL('..', import.meta.url),
+    env: { ...process.env, HOME: fakeHome, PAYDIRT_API_URL: 'https://mock.paydirt.invalid', PAYDIRT_AUTH_TOKEN: '', TEST_DELIVERY: 'none' },
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+  t.after(() => child.kill());
+  const client = mcpClient(child);
+  await client.request('initialize', { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'delivery-test', version: '1' } });
+  client.notify('notifications/initialized');
+
+  const args = { session_id: 'setup-session', app_id: 'app-123', subscription_provider: 'revenuecat' };
+  assert.equal(toolJson(await client.request('tools/call', { name: 'paydirt_finish_setup', arguments: args })).status, 'pending');
+
+  const unconfigured = toolJson(await client.request('tools/call', { name: 'paydirt_finish_setup', arguments: args }));
+  assert.equal(unconfigured.status, 'delivery_selection_required');
+  assert.equal(unconfigured.installation, undefined, 'no installation contract with an assumed destination');
+  assert.equal(unconfigured.question, 'Where should responses go: Slack, here in your coding agent, or both? Both is recommended.');
+  assert.equal(unconfigured.next_tool, 'paydirt_set_delivery');
+  assert.equal(unconfigured.retry_tool, 'paydirt_finish_setup');
+  assert.doesNotMatch(JSON.stringify(unconfigured), /"selected":\s*"agents"/);
+
+  // Credentials were saved, so the agent can record the answer without app_id.
+  const saved = toolJson(await client.request('tools/call', {
+    name: 'paydirt_set_delivery',
+    arguments: { destinations: ['slack', 'claude-code'] },
+  }));
+  assert.equal(saved.app_id, 'app-123');
+  assert.equal(saved.feedback_delivery_preference, 'both');
+
+  const ready = toolJson(await client.request('tools/call', { name: 'paydirt_finish_setup', arguments: unconfigured.retry_arguments }));
+  assert.equal(ready.status, 'ready');
+  assert.equal(ready.installation.delivery.selected, 'both');
+  assert.equal(ready.installation.slack.required_for_setup, true);
+
+  const direct = toolJson(await client.request('tools/call', {
+    name: 'paydirt_finish_setup',
+    arguments: { ...args, destinations: ['codex'] },
+  }));
+  assert.equal(direct.status, 'ready');
+  assert.equal(direct.installation.delivery.selected, 'agents');
+  assert.ok(direct.installation.agent_actions.some((action) => action.includes('Slack: not chosen')));
+});

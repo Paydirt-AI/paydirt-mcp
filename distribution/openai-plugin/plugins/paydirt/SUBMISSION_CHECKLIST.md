@@ -2,8 +2,13 @@
 
 ## Remote MCP gate
 
+- [x] Implement and locally test a Streamable HTTP entry point that preserves the stdio tool surface.
+- [x] Isolate hosted authorization by OAuth client and Paydirt account; never use the stdio credential file in hosted mode.
+- [x] Add local Host, Origin, content negotiation, routing-header, rate-limit, session cleanup, and health tests.
+- [x] Implement standards-based OAuth 2.1 discovery, DCR, PKCE S256, resource binding, short access tokens, refresh rotation, revocation, and restart-safe grants without passing MCP bearer tokens to the Paydirt API.
 - [ ] Deploy a public Streamable HTTP MCP endpoint at `https://mcp.paydirt.ai/mcp`.
-- [ ] Implement OAuth or another OpenAI-supported user authorization flow without embedding Paydirt user tokens in plugin files.
+- [ ] Apply the OAuth Supabase migration and deploy the matching API and dashboard approval flow.
+- [ ] Confirm the single Google + Slack OAuth approval flow in every target host.
 - [ ] Preserve the current setup, form, Slack, and read-only response contracts over HTTPS.
 - [ ] Return correct MCP content types, validate `Origin`, apply rate limits, and publish a health/status path.
 - [ ] Run an external MCP conformance and end-to-end test against production.

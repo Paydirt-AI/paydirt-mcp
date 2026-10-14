@@ -1,6 +1,6 @@
 # Paydirt OpenAI distribution candidate
 
-This directory is public install and submission metadata for a future Paydirt plugin. It is not an installed personal marketplace and does not claim a live remote MCP endpoint.
+This directory is public install and submission metadata for a future Paydirt plugin. A hosted Streamable HTTP entry point now exists in source, but this candidate remains inactive until that entry point is deployed and externally verified at the public HTTPS URL.
 
 - `plugins/paydirt` is the validated plugin candidate.
 - `.agents/plugins/marketplace.json` is repository-scoped public marketplace metadata.

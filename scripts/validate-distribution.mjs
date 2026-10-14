@@ -21,13 +21,29 @@ assert.equal(registry.packages[0].registryType, 'npm');
 assert.equal(registry.packages[0].identifier, packageJson.name);
 assert.equal(registry.packages[0].version, packageJson.version);
 assert.equal(registry.packages[0].transport.type, 'stdio');
-assert.equal(registry.remotes, undefined, 'stdio package must not claim a remote transport');
+assert.deepEqual(
+  registry.remotes,
+  [{ type: 'streamable-http', url: 'https://mcp.paydirt.ai/mcp' }],
+  'MCP Registry remotes must list only the hosted Streamable HTTP endpoint'
+);
 
 const claudeEntry = claudeMarketplace.plugins.find((plugin) => plugin.name === 'paydirt');
 assert.ok(claudeEntry, 'Claude marketplace must include Paydirt');
 assert.equal(claudeEntry.version, claudePlugin.version);
 assert.equal(claudePlugin.version, packageJson.version);
 assert.deepEqual(claudeMcp.paydirt.args, ['--yes', '--prefer-online', `paydirt-mcp@${packageJson.version}`]);
+assert.equal(claudePlugin.displayName, 'Paydirt');
+assert.ok(Array.isArray(claudePlugin.keywords) && claudePlugin.keywords.length > 0, 'Claude plugin needs keywords');
+for (const field of ['homepage', 'repository', 'license']) {
+  assert.ok(claudePlugin[field], `Claude plugin needs ${field}`);
+}
+
+const claudeSkill = await readFile(new URL('../plugins/paydirt/skills/install-paydirt/SKILL.md', import.meta.url), 'utf8');
+const openAiSkill = await readFile(
+  new URL('../distribution/openai-plugin/plugins/paydirt/skills/install-paydirt/SKILL.md', import.meta.url),
+  'utf8'
+);
+assert.equal(openAiSkill, claudeSkill, 'Claude and OpenAI install-paydirt skills must be identical');
 
 assert.equal(openAiPlugin.name, 'paydirt');
 assert.equal(openAiPlugin.version, packageJson.version);
