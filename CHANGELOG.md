@@ -2,6 +2,15 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.5.0 - 2026-10-11
+
+- Agent-first onboarding: the agent proposes Subscription Cancellation, Trial Cancellation, and Suggest a Feature with cancel-flow evidence and the Slack-and-agent destination in one message, and creates nothing until the human confirms.
+- Support user-scoped hosted OAuth grants: setup creates or reuses the app through ensure-ready from the inspected app identity, and the session keeps that app for later tool calls.
+- Add `paydirt_set_delivery`, `paydirt_set_slack_channels`, and `paydirt_wait_for_response` (the one bounded wait, max 90 seconds). `paydirt_connect_slack` now requests manual channel selection and returns to `/slack/connected`.
+- Setup no longer defaults delivery to coding agents; it returns `delivery_selection_required` with the exact question when no destination is saved.
+- Reorder `agent_actions` for a live demo first: Slack starts in parallel, the Debug setup check opens automatically on first launch, and the first response is announced in chat.
+- Shorten server instructions to under 1,500 characters, rewrite the install skill, and list the hosted endpoint as an MCP Registry remote.
+
 ## 2.4.0 - 2026-09-04
 
 - Resume website-started onboarding with the exact app ID and reject a mismatched authorization result before saving credentials.

@@ -7,12 +7,18 @@
     "url": "https://github.com/Paydirt-AI/paydirt-mcp",
     "source": "github"
   },
-  "version": "2.4.0",
+  "version": "2.5.0",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://mcp.paydirt.ai/mcp"
+    }
+  ],
   "packages": [
     {
       "registryType": "npm",
       "identifier": "paydirt-mcp",
-      "version": "2.4.0",
+      "version": "2.5.0",
       "transport": {
         "type": "stdio"
       }

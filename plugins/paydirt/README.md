@@ -1,6 +1,6 @@
 # Paydirt for Claude Code
 
-This plugin bundles Paydirt's iOS installation workflow and `paydirt-mcp@2.4.0`.
+This plugin bundles Paydirt's iOS installation workflow and `paydirt-mcp@2.5.0`.
 
 From Claude Code, add the public marketplace and install the plugin:
 
@@ -10,10 +10,10 @@ From Claude Code, add the public marketplace and install the plugin:
 /reload-plugins
 ```
 
-Then say “Add Paydirt and show me it working.” Claude confirms cancellation and
-Suggest a Feature choices, browser onboarding asks whether delivery should be
-Slack and coding agents (recommended), Slack only, or coding agents only, and
-then Claude builds the iOS app and leaves the requested-form setup check visibly open.
-Existing feedback UI is preserved unless you
-explicitly request a change. Authentication begins with a URL returned by
-`paydirt_begin_setup`; the MCP server never launches a browser or blocks while waiting.
+Then say “Add Paydirt to this app.” Claude inspects the project and proposes
+Subscription Cancellation, Trial Cancellation, and Suggest a Feature, with
+responses in Slack and Claude Code, in one message. After you confirm, it
+creates the forms, starts Slack in parallel, writes the SDK key into the
+project, and builds and launches the app with the Debug setup check open.
+Submit one test answer and Claude announces it as it lands. Existing feedback
+screens and purchase flows are preserved, and you never paste a key.

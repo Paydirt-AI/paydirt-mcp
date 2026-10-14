@@ -276,8 +276,57 @@ export async function getFeedbackDigest(
   };
 }
 
-export async function getSlackInstallUrl(token: string, appId: string): Promise<{ auth_url: string }> {
-  return apiRequest<{ auth_url: string }>(`/api/slack/install?app_id=${appId}`, { token });
+export async function getSlackInstallUrl(
+  token: string,
+  appId: string,
+  options: { delivery?: 'both' | 'slack'; channelSelection?: 'manual'; returnTo?: string } = {}
+): Promise<{ auth_url: string }> {
+  const params = new URLSearchParams({ app_id: appId });
+  if (options.delivery) params.set('delivery', options.delivery);
+  if (options.channelSelection) params.set('channel_selection', options.channelSelection);
+  if (options.returnTo) params.set('return_to', options.returnTo);
+  return apiRequest<{ auth_url: string }>(`/api/slack/install?${params.toString()}`, { token });
+}
+
+export interface SlackChannelSelection {
+  success: boolean;
+  feature_channel_id: string | null;
+  cancellation_channel_id: string | null;
+}
+
+export async function setSlackChannels(
+  token: string,
+  appId: string,
+  channels: { feature_channel_id: string | null; cancellation_channel_id: string | null }
+): Promise<SlackChannelSelection> {
+  return apiRequest<SlackChannelSelection>(`/api/slack/${encodeURIComponent(appId)}/channels`, {
+    method: 'PUT',
+    body: channels,
+    token,
+  });
+}
+
+export interface AppResponse extends Response {
+  forms?: { name: string; type: Form['type'] } | null;
+}
+
+// Completed responses finished at or after `since`, newest completion first.
+export async function getCompletedResponsesSince(
+  token: string,
+  appId: string,
+  options: { since: string; formId?: string; limit?: number }
+): Promise<AppResponse[]> {
+  const params = new URLSearchParams({
+    status: 'completed',
+    completed_from: options.since,
+    limit: String(options.limit ?? 10),
+  });
+  if (options.formId) params.set('form_id', options.formId);
+  const { responses } = await apiRequest<{ responses: AppResponse[] }>(
+    `/api/responses/app/${encodeURIComponent(appId)}?${params.toString()}`,
+    { token }
+  );
+  return responses;
 }
 
 export async function listSlackChannels(
@@ -383,6 +432,7 @@ export async function updateApp(
     app_description?: string;
     system_prompt?: string;
     app_context_prompt?: string;
+    feedback_delivery_preference?: 'both' | 'slack' | 'agents';
   }
 ): Promise<App> {
   const { app } = await apiRequest<{ app: App }>(`/api/apps/${appId}`, {
@@ -476,7 +526,7 @@ export interface SetupStatus {
   auth_token?: string;
   app_id?: string;
   action?: 'created' | 'reused' | 'repaired';
-  delivery_preference?: 'both' | 'slack' | 'agents';
+  delivery_preference?: 'both' | 'slack' | 'agents' | null;
   forms?: Array<{
     id: string;
     type: Form['type'];

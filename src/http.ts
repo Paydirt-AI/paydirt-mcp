@@ -122,11 +122,24 @@ function authenticatedCredentials(request: Request): StoredCredentials | null {
   const apiToken = request.auth?.extra?.apiToken;
   const appId = request.auth?.extra?.appId;
   if (typeof apiToken !== 'string') return null;
+  const grantAppId = typeof appId === 'string' && appId ? appId : undefined;
   return {
     auth_token: apiToken,
-    app_id: typeof appId === 'string' ? appId : undefined,
+    app_id: grantAppId,
+    grant_app_id: grantAppId,
     source: 'hosted_oauth',
   };
+}
+
+// A user-scoped grant has no app; keep the app chosen by setup in this session.
+function refreshSessionCredentials(store: MemoryCredentialStore, credentials: StoredCredentials): void {
+  const previous = store.get();
+  const keepSessionApp = !credentials.grant_app_id;
+  store.set({
+    ...credentials,
+    app_id: keepSessionApp ? previous?.app_id : credentials.app_id,
+    api_key: keepSessionApp || previous?.app_id === credentials.app_id ? previous?.api_key : undefined,
+  });
 }
 
 function authenticatedUserId(request: Request): string | null {
@@ -396,7 +409,7 @@ export function createHostedMcpApp(options: HostedMcpOptions = {}) {
       jsonRpcError(response, 403, 'This OAuth token does not own the MCP session');
       return;
     }
-    session.credentials.set({ ...credentials, api_key: session.credentials.get()?.api_key });
+    refreshSessionCredentials(session.credentials, credentials);
     session.lastSeenAt = now();
     await session.transport.handleRequest(request, response, request.body);
   });
@@ -419,7 +432,7 @@ export function createHostedMcpApp(options: HostedMcpOptions = {}) {
       return;
     }
     const credentials = authenticatedCredentials(request);
-    if (credentials) session.credentials.set({ ...credentials, api_key: session.credentials.get()?.api_key });
+    if (credentials) refreshSessionCredentials(session.credentials, credentials);
     session.lastSeenAt = now();
     await session.transport.handleRequest(request, response);
   });
