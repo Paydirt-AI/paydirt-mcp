@@ -149,27 +149,31 @@ test('setup completes in one MCP process without a restart and stores credential
   assert.deepEqual(ready.installation.use_cases, ['feature_request', 'trial_cancellation', 'subscription_cancellation']);
   assert.match(ready.installation.ios.regular_feedback_trigger, /feature-123/);
   assert.equal(ready.installation.ios.feature_request_placement.requested_placement, 'settings');
-  assert.equal(ready.installation.ios.install_verification.mode, 'requested_forms_setup_check');
-  assert.equal(ready.installation.ios.install_verification.form_id, 'feature-123');
-  assert.equal(ready.installation.ios.install_verification.tests.length, 3);
-  assert.deepEqual(
-    ready.installation.ios.install_verification.tests.map((item) => item.label),
-    ['Suggest a Feature', 'Trial Cancellation', 'Subscription Cancellation']
-  );
-  assert.match(ready.installation.ios.install_verification.presentation, /presentSetupCheck/);
-  assert.match(ready.installation.ios.install_verification.presentation, /requiresSlackDelivery: true/);
-  assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /#if DEBUG/);
-  assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /UserDefaults/);
-  assert.match(ready.installation.ios.install_verification.app_ready_body_snippet, /feature-123/);
-  assert.match(ready.installation.ios.install_verification.repeat_test_reset, /removeObject/);
-  assert.match(ready.installation.ios.install_verification.behavior, /3\/3 delivered/);
+  // First-run demo: the real Subscription Cancellation form opens by itself, no checklist.
+  const verification = ready.installation.ios.install_verification;
+  assert.equal(verification.mode, 'first_run_demo');
+  assert.equal(verification.form_id, 'subscription-123');
+  assert.equal(verification.form_name, 'Subscription Cancellation');
+  assert.equal(verification.tests.length, 1);
+  assert.match(verification.presentation, /Paydirt\.presentForm/);
+  assert.match(verification.presentation, /paydirt_install_test": true/);
+  assert.doesNotMatch(verification.app_ready_body_snippet, /presentSetupCheck/);
+  assert.match(verification.app_ready_body_snippet, /#if DEBUG/);
+  assert.match(verification.app_ready_body_snippet, /UserDefaults/);
+  assert.match(verification.app_ready_body_snippet, /subscription-123/);
+  assert.match(verification.repeat_test_reset, /removeObject/);
+  assert.match(verification.behavior, /no checklist/);
+  // The full three-form check stays available, but only on request.
+  assert.equal(verification.optional_full_check.tests.length, 3);
+  assert.match(verification.optional_full_check.presentation, /presentSetupCheck/);
+  assert.equal(ready.installation.completion_requirements.required_test_submissions, 1);
   assert.match(ready.installation.host_app_preservation.existing_feedback_ui, /Do not replace/);
   assert.ok(ready.installation.agent_actions.some((action) => action.includes('preserving all existing feedback behavior')));
-  assert.ok(ready.installation.agent_actions.some((action) => action.includes('leave the Paydirt setup check visibly open')));
+  assert.ok(ready.installation.agent_actions.some((action) => action.includes('opens the real Subscription Cancellation form by itself on first launch')));
   assert.ok(ready.installation.agent_actions.some((action) => action.includes('Slack: already connected with every form routed')));
   const actionIndex = (text) => ready.installation.agent_actions.findIndex((action) => action.includes(text));
-  assert.ok(actionIndex('Write the public SDK key into the project yourself') < actionIndex('opens the Paydirt setup check automatically on first launch'));
-  assert.ok(actionIndex('opens the Paydirt setup check automatically on first launch') < actionIndex('paydirt_wait_for_response'));
+  assert.ok(actionIndex('Write the public SDK key into the project yourself') < actionIndex('form by itself on first launch'));
+  assert.ok(actionIndex('form by itself on first launch') < actionIndex('paydirt_wait_for_response'));
   assert.ok(actionIndex('paydirt_wait_for_response') < actionIndex('Daily brief: offer'));
   assert.equal(ready.installation.delivery.recommended, 'both');
   assert.equal(ready.installation.delivery.selected, 'both');
@@ -179,8 +183,8 @@ test('setup completes in one MCP process without a restart and stores credential
   assert.equal(ready.installation.slack.feature_channel.name, 'paydirt-suggest-a-feature');
   assert.equal(ready.installation.slack.cancellation_channel.name, 'paydirt-cancellations');
   assert.equal(ready.installation.slack.all_forms_assigned, true);
-  assert.equal(ready.installation.completion_requirements.install_test_setup_visible, true);
-  assert.equal(ready.installation.completion_requirements.required_test_submissions, 3);
+  assert.equal(ready.installation.completion_requirements.first_run_demo_form_opened, true);
+  assert.equal(ready.installation.completion_requirements.required_test_submissions, 1);
   assert.equal(ready.installation.completion_requirements.test_deliveries_verified, true);
   assert.equal(ready.installation.completion_requirements.automatic_test_trigger_debug_only, true);
   assert.equal(ready.installation.completion_requirements.delivery_preference_confirmed_in_chat, true);
@@ -232,14 +236,23 @@ for (const [name, useCases, formIds, delivery] of [
     assert.equal(toolJson(await client.request('tools/call', { name: 'paydirt_finish_setup', arguments: args })).status, 'pending');
     const result = toolJson(await client.request('tools/call', { name: 'paydirt_finish_setup', arguments: args }));
     const check = result.installation.ios.install_verification;
-    assert.deepEqual(check.tests.map((item) => item.form_id), formIds);
-    assert.equal(result.installation.completion_requirements.required_test_submissions, formIds.length);
+    // One real form opens on first launch; cancellation wins when requested.
+    const demoId = formIds.includes('subscription-123') ? 'subscription-123' : formIds[0];
+    assert.equal(check.mode, 'first_run_demo');
+    assert.deepEqual(check.tests.map((item) => item.form_id), [demoId]);
+    assert.equal(result.installation.completion_requirements.required_test_submissions, 1);
     assert.equal(result.installation.ios.minimum_version, '2.2.0');
-    for (const id of formIds) assert.ok(check.presentation.includes(id));
-    assert.match(check.presentation, /PaydirtSetupCheckForm/);
-    assert.ok(check.presentation.includes(`requiresSlackDelivery: ${delivery !== 'agents'}`));
-    assert.doesNotMatch(check.app_ready_body_snippet, /standard\.set\(true/);
-    assert.match(check.behavior, /does not prove the real subscription cancellation trigger/);
+    assert.ok(check.presentation.includes(demoId));
+    assert.match(check.presentation, /Paydirt\.presentForm/);
+    // The demo is remembered only after the developer actually answers it.
+    assert.match(check.app_ready_body_snippet, /onSubmission: \{ _ in UserDefaults\.standard\.set\(true/);
+    assert.match(check.behavior, /real subscription cancellation trigger still needs a sandbox check/);
+    if (formIds.length > 1) {
+      assert.deepEqual(check.optional_full_check.tests.map((item) => item.form_id), formIds);
+      assert.ok(check.optional_full_check.presentation.includes(`requiresSlackDelivery: ${delivery !== 'agents'}`));
+    } else {
+      assert.equal(check.optional_full_check, null);
+    }
     if (delivery === 'agents') {
       const incomplete = toolJson(await client.request('tools/call', {
         name: 'paydirt_finish_setup',
