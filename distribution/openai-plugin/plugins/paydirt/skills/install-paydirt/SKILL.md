@@ -52,7 +52,7 @@ After launch, if Slack was chosen, call `paydirt_slack_status`. Once connected, 
 
 ## 5. The first response
 
-In one short line, ask the human to answer the form that just opened, by voice or text. Immediately call `paydirt_wait_for_response` with the app ID and `since` set to the launch time. It is the only bounded wait (default 45 seconds, max 90). When it returns `received`, announce it: "Your first response just landed: '…'". On `timed_out`, ask whether they submitted, then call it again. That one response completes installation. Offer to test the other forms (`install_verification.optional_full_check`) only if the human asks. Mention once that the real cancellation trigger still needs a sandbox check later.
+In one short line, ask the human to answer the form that just opened, by voice or text. Immediately call `paydirt_wait_for_response` with the app ID and `since` set to the launch time. It is the only bounded wait (default 45 seconds, max 90). When it returns `received`, announce it: "Your first response just landed: '…'". On `timed_out`, ask whether they submitted, then call it again. That one response completes installation. To show any other form or re-test, relaunch the app with the matching `install_verification.demo_commands` entry (for example `-paydirt-demo trial`). It works in Debug builds only, needs no button, and ships nothing. If an iPhone is connected and the project has a signing team, offer the device command so they see it on their phone, where the form also opens by itself on first launch. Mention once that the real cancellation trigger still needs a sandbox check later.
 
 ## 6. Daily brief
 

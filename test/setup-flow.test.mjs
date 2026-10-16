@@ -157,6 +157,14 @@ test('setup completes in one MCP process without a restart and stores credential
   assert.equal(verification.tests.length, 1);
   assert.match(verification.presentation, /Paydirt\.presentForm/);
   assert.match(verification.presentation, /paydirt_install_test": true/);
+  // Debug launch argument reopens any form on demand: no button, nothing in release.
+  assert.match(verification.app_ready_body_snippet, /UserDefaults\.standard\.string\(forKey: "paydirt-demo"\)/);
+  assert.match(verification.app_ready_body_snippet, /"cancellation": \("subscription-123", "subscription_cancellation"\)/);
+  assert.match(verification.app_ready_body_snippet, /"trial": \(/);
+  assert.match(verification.app_ready_body_snippet, /"feature": \("feature-123"/);
+  assert.equal(verification.demo_commands.simulator.length, 3);
+  assert.match(verification.demo_commands.simulator[0].command, /xcrun simctl launch --terminate-running-process booted BUNDLE_ID -paydirt-demo /);
+  assert.match(verification.demo_commands.device, /xcrun devicectl device process launch .* -paydirt-demo cancellation/);
   assert.doesNotMatch(verification.app_ready_body_snippet, /presentSetupCheck/);
   assert.match(verification.app_ready_body_snippet, /#if DEBUG/);
   assert.match(verification.app_ready_body_snippet, /UserDefaults/);
@@ -242,10 +250,11 @@ for (const [name, useCases, formIds, delivery] of [
     assert.deepEqual(check.tests.map((item) => item.form_id), [demoId]);
     assert.equal(result.installation.completion_requirements.required_test_submissions, 1);
     assert.equal(result.installation.ios.minimum_version, '2.2.0');
-    assert.ok(check.presentation.includes(demoId));
+    assert.ok(check.app_ready_body_snippet.includes(`("${demoId}"`));
     assert.match(check.presentation, /Paydirt\.presentForm/);
     // The demo is remembered only after the developer actually answers it.
     assert.match(check.app_ready_body_snippet, /onSubmission: \{ _ in UserDefaults\.standard\.set\(true/);
+  assert.equal(check.demo_commands.simulator.length, formIds.length);
     assert.match(check.behavior, /real subscription cancellation trigger still needs a sandbox check/);
     if (formIds.length > 1) {
       assert.deepEqual(check.optional_full_check.tests.map((item) => item.form_id), formIds);

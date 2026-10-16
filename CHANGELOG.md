@@ -2,6 +2,12 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.5.2
+
+- Debug demo triggers: the first-run snippet also opens any requested form on demand when the app is launched with `-paydirt-demo cancellation|trial|feature`. There's no button and nothing in release builds.
+- New `install_verification.demo_commands`: ready-to-run `xcrun simctl` (simulator) and `xcrun devicectl` (iPhone) launch commands, plus the Xcode scheme argument.
+- On a developer's iPhone, the cancellation form also opens by itself on the first Debug launch.
+
 ## 2.5.1
 
 - First-run demo: on first launch the real Subscription Cancellation form opens by itself over the app. There is no checklist, no navigation, and nothing stacked behind it. The developer answers once, the agent announces it with `paydirt_wait_for_response`, and that single response completes installation.
