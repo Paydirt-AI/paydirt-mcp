@@ -41,8 +41,8 @@ Without waiting for Slack, perform every `agent_action` in order, posting short 
 - Write the public SDK key into the project yourself using `ios.configuration`. Add `NSMicrophoneUsageDescription` if missing.
 - Wire `ios.subscription` to the subscription code already working in the app. Use RevenueCat when installed; otherwise use native StoreKit, including apps where Superwall only presents paywalls. Add any small bridge source yourself. Omit unavailable optional metadata rather than blocking.
 - Place Suggest a Feature at the confirmed location.
-- Place `ios.install_verification.app_ready_body_snippet` in a safe app-ready lifecycle body. This one-time DEBUG-only trigger opens the Paydirt setup check automatically on first launch, with no navigation needed.
-- Resolve dependencies, build, and launch on a simulator or connected device. Leave the setup check visibly open.
+- Place `ios.install_verification.app_ready_body_snippet` in a safe app-ready lifecycle body. This one-time DEBUG-only trigger opens the real cancellation form by itself on first launch: no checklist, no navigation.
+- Resolve dependencies, build, and launch on a simulator or connected device. The form is on screen when the app opens.
 
 Preserve every existing feedback form, button, screen, handler, and destination, and every purchase, paywall, and subscription flow. Never replace, remove, or reroute them unless the human asks for that exact change. If a cancellation bridge cannot compile, report the exact provider error, keep the existing behavior, and finish the unaffected forms. Never submit a test for the human, and never include the automatic trigger in release builds.
 
@@ -52,7 +52,7 @@ After launch, if Slack was chosen, call `paydirt_slack_status`. Once connected, 
 
 ## 5. The first response
 
-Ask the human to submit one test in the open setup check, by voice or text. Immediately call `paydirt_wait_for_response` with the app ID and `since` set to the launch time. It is the only bounded wait (default 60 seconds, max 90). When it returns `received`, announce it: "Your first response just landed: '…'". On `timed_out`, ask whether they submitted, then call it again. Installation is complete when the setup check shows every requested form verified. Form verification does not prove the real cancellation trigger, so verify the trial and paid triggers separately with the subscription provider.
+In one short line, ask the human to answer the form that just opened, by voice or text. Immediately call `paydirt_wait_for_response` with the app ID and `since` set to the launch time. It is the only bounded wait (default 45 seconds, max 90). When it returns `received`, announce it: "Your first response just landed: '…'". On `timed_out`, ask whether they submitted, then call it again. That one response completes installation. Offer to test the other forms (`install_verification.optional_full_check`) only if the human asks. Mention once that the real cancellation trigger still needs a sandbox check later.
 
 ## 6. Daily brief
 

@@ -9,7 +9,7 @@
     {
       "name": "paydirt",
       "description": "Add voice Subscription Cancellation, Trial Cancellation, and Suggest a Feature forms to iOS apps, with responses in Slack and your coding agent",
-      "version": "2.5.0",
+      "version": "2.5.1",
       "author": {
         "name": "Paydirt"
       },

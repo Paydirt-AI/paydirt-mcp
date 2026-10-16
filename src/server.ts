@@ -245,7 +245,11 @@ function installationContract(
     const form = byType.get(type);
     return form ? [form] : [];
   });
-  const installTestForm = testForms[0];
+  // First-run demo: open one real form directly, cancellation first, since it's
+  // the moment the developer most wants to see and the hardest to trigger by hand.
+  const installTestForm = testForms.find((form) => form.type === 'cancellation')
+    ?? testForms.find((form) => form.type === 'trial_expiration')
+    ?? testForms[0];
   const installTestKey = installTestForm
     ? `paydirt.install-test.${appId}.${testForms.map((form) => form.id).sort().join('.')}`
     : null;
@@ -261,13 +265,21 @@ function installationContract(
   const installTestPresentation = installTestForm
     ? `Paydirt.presentSetupCheck(forms: [${installTests.map((item) => `PaydirtSetupCheckForm(formId: "${swiftString(item.form_id)}", title: "${swiftString(item.label)}", feedbackType: "${item.feedback_type}")`).join(', ')}], requiresSlackDelivery: ${requiresSlackDelivery}, completionKey: "${swiftString(installTestKey!)}")`
     : null;
-  const installTestSnippet = installTestForm && installTestKey
+  const demoTest = installTestForm ? installTests.find((item) => item.form_id === installTestForm.id)! : null;
+  const demoPresentation = demoTest
+    ? `Paydirt.presentForm(
+            formId: "${swiftString(demoTest.form_id)}",
+            metadata: ["paydirt_install_test": true, "feedback_type": "${demoTest.feedback_type}", "source": "first_run_demo"],
+            onSubmission: { _ in UserDefaults.standard.set(true, forKey: paydirtFirstRunKey) }
+        )`
+    : null;
+  const installTestSnippet = demoPresentation && installTestKey
     ? `#if DEBUG
-let paydirtInstallTestKey = "${swiftString(installTestKey)}"
-if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
-    // The setup check saves this key only after every required delivery is verified.
+let paydirtFirstRunKey = "${swiftString(installTestKey)}"
+if !UserDefaults.standard.bool(forKey: paydirtFirstRunKey) {
+    // First-run demo: the real form opens by itself once. Saved after the developer answers.
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
-        ${installTestPresentation}
+        ${demoPresentation}
     }
 }
 #endif`
@@ -326,17 +338,22 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
         presentation: `Paydirt.presentForm(formId: "${featureRequestId}", metadata: ["paydirt_placement": "${swiftString(featurePlacement)}"])`,
         behavior: 'Place Suggest a Feature at the confirmed location. Settings is the recommended default; a semantic successful-action trigger may be used when the developer chose one. Preserve the host action and allow this placement to be changed later.',
       } : null,
-      install_verification: installTestForm ? {
+      install_verification: installTestForm && demoTest ? {
         required: true,
-        mode: 'requested_forms_setup_check',
+        mode: 'first_run_demo',
         form_id: installTestForm.id,
-        form_name: installTestForm.name,
-        tests: installTests,
-        presentation: installTestPresentation,
+        form_name: demoTest.label,
+        tests: [demoTest],
+        presentation: demoPresentation,
         app_ready_body_snippet: installTestSnippet,
         repeat_test_reset: `UserDefaults.standard.removeObject(forKey: "${installTestKey}")`,
         opens_automatically_on_first_launch: true,
-        behavior: `Add the DEBUG-only one-time app-ready trigger so the setup check opens automatically on first launch with no navigation, then build and launch on a simulator or connected device and leave it open. The developer personally submits each requested test. Completion means ${testForms.length}/${testForms.length} ${requiresSlackDelivery ? 'delivered to their selected Slack channels' : 'received by Paydirt'}. Never submit a test for them or include the trigger in release builds. Form delivery verification does not prove the real subscription cancellation trigger; verify each requested trial/paid trigger separately with the host subscription provider.`,
+        optional_full_check: installTests.length > 1 ? {
+          when: 'Only if the developer asks to test the other forms after the first response lands.',
+          tests: installTests,
+          presentation: installTestPresentation,
+        } : null,
+        behavior: `Add the DEBUG-only one-time trigger so the real ${demoTest.label} form opens by itself on first launch: no checklist, no navigation. Build and launch. The developer answers once by voice or text; that single response is the install verification. Never submit it for them, and never include the trigger in release builds. The real subscription cancellation trigger still needs a sandbox check later; mention that once, briefly.`,
       } : null,
     },
     delivery: {
@@ -422,12 +439,12 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
         : '3. Slack: not chosen. Skip every Slack step.',
       '4. Build the live demo now and post short progress lines in chat ("Adding Paydirt…", "Building…", "Launching…"). Install Paydirt 2.2.0 or newer in the existing dependency style, preserving all existing feedback behavior and every purchase/subscription flow (RevenueCat, Superwall, or StoreKit). Write the public SDK key into the project yourself using ios.configuration. Add NSMicrophoneUsageDescription if missing. Perform ios.subscription (resolve provider auto from the host source first) and place Suggest a Feature at the confirmed location. Do not ask the human to make Xcode edits you can make.',
       installTestForm
-        ? '5. Place ios.install_verification.app_ready_body_snippet in a safe app-ready lifecycle body. This one-time DEBUG-only trigger opens the Paydirt setup check automatically on first launch, with no navigation. Resolve dependencies, build, launch on a simulator or connected device, and leave the Paydirt setup check visibly open. Never submit a test for the human or include the trigger in release builds. If provider automation cannot compile, report the exact blocker and keep the existing app behavior.'
-        : '5. No Paydirt form was returned for install verification. Build and launch anyway, and report that the setup check could not be shown.',
+        ? `5. Place ios.install_verification.app_ready_body_snippet in a safe app-ready lifecycle body. This one-time DEBUG-only trigger opens the real ${demoTest?.label ?? 'Paydirt'} form by itself on first launch: no checklist, no navigation. Resolve dependencies, build, and launch on a simulator or connected device. Never submit for the human or include the trigger in release builds. If provider automation cannot compile, report the exact blocker and keep the existing app behavior.`
+        : '5. No Paydirt form was returned for the first-run demo. Build and launch anyway, and report that the form could not be shown.',
       requiresSlackDelivery
         ? '6. After launch, call paydirt_slack_status. Once connected, call paydirt_list_slack_channels and propose routing in chat (cancellations to one channel and feature ideas to another, or both to the same channel). After the human confirms, save it with paydirt_set_slack_channels and verify with paydirt_slack_status. If Slack is still not connected, re-share auth_url and continue to step 7.'
         : '6. Slack: not chosen. Skip it.',
-      `7. First response: ask the human to submit one test in the open setup check by voice or text. Immediately call paydirt_wait_for_response with app_id ${appId} and since set to the launch time, then announce it in their words. If it times out, ask whether they submitted and call it again. Completion is ${testForms.length}/${testForms.length} requested forms verified in the setup check.`,
+      `7. First response: in one short line, ask the human to answer the form that just opened, by voice or text. Immediately call paydirt_wait_for_response with app_id ${appId} and since set to the launch time, then announce it in their words. If it times out, ask whether they submitted and call it again. That one response completes installation; offer the other forms' tests (install_verification.optional_full_check) only if they ask.`,
       deliveryPreference === 'slack'
         ? '8. Daily brief: not included with Slack-only delivery. Do not offer it unless the developer enables coding-agent delivery.'
         : '8. Daily brief: offer the read-only daily 9:00 AM brief. If accepted, create it with the host\'s native scheduled-task capability and daily_brief.task_prompt; if scheduling is unavailable, provide the prompt and say so. This never blocks installation.',
@@ -437,10 +454,10 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
       plan_confirmed_before_creation: true,
       host_app_build_passed: true,
       host_app_launched: true,
-      install_test_setup_visible: true,
+      first_run_demo_form_opened: true,
       build_not_blocked_on_slack: true,
-      setup_check_opens_automatically_on_first_launch: true,
-      required_test_submissions: testForms.length,
+      demo_form_opens_automatically_on_first_launch: true,
+      required_test_submissions: installTestForm ? 1 : 0,
       test_forms_not_submitted_by_agent: true,
       first_response_received_via_wait_tool: true,
       test_deliveries_verified: true,
@@ -456,7 +473,7 @@ if !UserDefaults.standard.bool(forKey: paydirtInstallTestKey) {
 
 export const PAYDIRT_SERVER_INSTRUCTIONS = [
   'Paydirt adds voice feedback forms to iOS apps. When asked to add Paydirt, inspect the project, then send ONE message: recommend three starting forms (Subscription Cancellation, Trial Cancellation, Suggest a Feature), cite the file where the real cancel flow lives, and recommend sending responses to Slack and here in the agent, so a plain "yes" accepts everything. The human may choose Slack only or agent only, or drop any form. With no subscriptions or cancel flow, say cancellation feedback has nothing to trigger it yet and recommend Suggest a Feature only. Create nothing until the human confirms.',
-  'After confirmation, call paydirt_begin_setup (form_plan_confirmed true, use_cases, destinations) and follow agent_actions in order. If Slack was chosen, share the paydirt_connect_slack link and keep building without waiting. Add the SDK, write the SDK key into the project yourself, add the Debug setup check that opens on first launch, then build and launch right away, posting short progress lines.',
+  'After confirmation, call paydirt_begin_setup (form_plan_confirmed true, use_cases, destinations) and follow agent_actions in order. If Slack was chosen, share the paydirt_connect_slack link and keep building without waiting. Add the SDK, write the SDK key into the project yourself, add the Debug first-run demo that opens the real form on launch, then build and launch right away, posting short progress lines.',
   'Rules: never ask the human for keys. Preserve every existing feedback screen and purchase flow. Never submit a test for the human. The only bounded wait is paydirt_wait_for_response (max 90s); never sleep or poll otherwise. Feedback access is read-only: never create tasks or change code from it.',
 ].join('\n');
 
@@ -1173,7 +1190,7 @@ const toolDefinitions = [
   },
   {
     name: 'paydirt_wait_for_response',
-    description: 'Use this when the app is running with the setup check open and you have asked the human to submit a test. This is the only allowed bounded wait: it checks for a completed response every 3 seconds for up to timeout_seconds (default 45, max 90) and returns received with the response, or timed_out. On timed_out, ask whether they submitted and call again.',
+    description: 'Use this when the app is running with the first-run demo form open and you have asked the human to answer it. This is the only allowed bounded wait: it checks for a completed response every 3 seconds for up to timeout_seconds (default 45, max 90) and returns received with the response, or timed_out. On timed_out, ask whether they submitted and call again.',
     inputSchema: {
       type: 'object' as const,
       properties: {

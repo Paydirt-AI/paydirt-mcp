@@ -2,6 +2,11 @@
 
 All notable changes to Paydirt MCP are documented here.
 
+## 2.5.1
+
+- First-run demo: on first launch the real Subscription Cancellation form opens by itself over the app. There is no checklist, no navigation, and nothing stacked behind it. The developer answers once, the agent announces it with `paydirt_wait_for_response`, and that single response completes installation.
+- The three-form setup check is still available as `install_verification.optional_full_check`, used only when the developer asks to test the other forms.
+
 ## 2.5.0 - 2026-10-11
 
 - Agent-first onboarding: the agent proposes Subscription Cancellation, Trial Cancellation, and Suggest a Feature with cancel-flow evidence and the Slack-and-agent destination in one message, and creates nothing until the human confirms.
