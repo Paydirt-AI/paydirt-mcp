@@ -7,12 +7,12 @@ import test from 'node:test';
 const root = new URL('..', import.meta.url);
 const json = async (path) => JSON.parse(await readFile(new URL(path, root), 'utf8'));
 
-test('distribution metadata validates at 2.5.1 with the hosted remote listed', async () => {
+test('distribution metadata validates at 2.5.2 with the hosted remote listed', async () => {
   const packageJson = await json('package.json');
-  assert.equal(packageJson.version, '2.5.1');
-  assert.equal((await json('.mcp/server.json')).version, '2.5.1');
-  assert.deepEqual((await json('plugins/paydirt/.mcp.json')).paydirt.args.at(-1), 'paydirt-mcp@2.5.1');
-  assert.equal((await json('plugins/paydirt/.claude-plugin/plugin.json')).version, '2.5.1');
+  assert.equal(packageJson.version, '2.5.2');
+  assert.equal((await json('.mcp/server.json')).version, '2.5.2');
+  assert.deepEqual((await json('plugins/paydirt/.mcp.json')).paydirt.args.at(-1), 'paydirt-mcp@2.5.2');
+  assert.equal((await json('plugins/paydirt/.claude-plugin/plugin.json')).version, '2.5.2');
 
   const { stdout } = await promisify(execFile)(process.execPath, ['scripts/validate-distribution.mjs'], { cwd: root });
   assert.match(stdout, /internally consistent/);

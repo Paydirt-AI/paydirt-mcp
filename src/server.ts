@@ -266,24 +266,46 @@ function installationContract(
     ? `Paydirt.presentSetupCheck(forms: [${installTests.map((item) => `PaydirtSetupCheckForm(formId: "${swiftString(item.form_id)}", title: "${swiftString(item.label)}", feedbackType: "${item.feedback_type}")`).join(', ')}], requiresSlackDelivery: ${requiresSlackDelivery}, completionKey: "${swiftString(installTestKey!)}")`
     : null;
   const demoTest = installTestForm ? installTests.find((item) => item.form_id === installTestForm.id)! : null;
+  // Debug-only demo triggers the agent can fire from outside the app, so a form
+  // that normally waits for a real action can be opened on demand. Nothing ships.
+  const demoKind = (feedbackType: string) => feedbackType === 'subscription_cancellation' ? 'cancellation'
+    : feedbackType === 'trial_cancellation' ? 'trial'
+      : feedbackType === 'feature_request' ? 'feature' : 'feedback';
+  const demoForms = installTests.map((item) => ({ ...item, demo: demoKind(item.feedback_type) }));
+  const firstDemo = demoTest ? demoKind(demoTest.feedback_type) : null;
   const demoPresentation = demoTest
     ? `Paydirt.presentForm(
-            formId: "${swiftString(demoTest.form_id)}",
-            metadata: ["paydirt_install_test": true, "feedback_type": "${demoTest.feedback_type}", "source": "first_run_demo"],
+            formId: form.id,
+            metadata: ["paydirt_install_test": true, "feedback_type": form.type, "source": "debug_demo"],
             onSubmission: { _ in UserDefaults.standard.set(true, forKey: paydirtFirstRunKey) }
         )`
     : null;
-  const installTestSnippet = demoPresentation && installTestKey
+  const installTestSnippet = demoPresentation && installTestKey && firstDemo
     ? `#if DEBUG
+// Paydirt demo (Debug builds only). Opens a form once on first launch, and again
+// whenever the app is launched with: -paydirt-demo ${demoForms.map((form) => form.demo).join('|')}
+let paydirtDemoForms: [String: (id: String, type: String)] = [
+${demoForms.map((form) => `    "${form.demo}": ("${swiftString(form.form_id)}", "${form.feedback_type}"),`).join('\n')}
+]
 let paydirtFirstRunKey = "${swiftString(installTestKey)}"
-if !UserDefaults.standard.bool(forKey: paydirtFirstRunKey) {
-    // First-run demo: the real form opens by itself once. Saved after the developer answers.
+let paydirtDemo = UserDefaults.standard.string(forKey: "paydirt-demo")
+    ?? (UserDefaults.standard.bool(forKey: paydirtFirstRunKey) ? nil : "${firstDemo}")
+if let demo = paydirtDemo, let form = paydirtDemoForms[demo] {
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
         ${demoPresentation}
     }
 }
 #endif`
     : null;
+  const demoCommands = firstDemo ? {
+    simulator: demoForms.map((form) => ({
+      form: form.label,
+      command: `xcrun simctl launch --terminate-running-process booted BUNDLE_ID -paydirt-demo ${form.demo}`,
+    })),
+    device: `xcrun devicectl device process launch --terminate-existing --device DEVICE_ID BUNDLE_ID -paydirt-demo ${firstDemo}`,
+    xcode: `Product → Scheme → Edit Scheme → Run → Arguments: add "-paydirt-demo ${firstDemo}" (Debug only).`,
+    note: 'Replace BUNDLE_ID with the app\'s PRODUCT_BUNDLE_IDENTIFIER and DEVICE_ID with the id from `xcrun devicectl list devices`. Launch arguments only work in Debug builds that contain the snippet.',
+  } : null;
 
   const configuration = [
     'import Paydirt',
@@ -348,12 +370,13 @@ if !UserDefaults.standard.bool(forKey: paydirtFirstRunKey) {
         app_ready_body_snippet: installTestSnippet,
         repeat_test_reset: `UserDefaults.standard.removeObject(forKey: "${installTestKey}")`,
         opens_automatically_on_first_launch: true,
+        demo_commands: demoCommands,
         optional_full_check: installTests.length > 1 ? {
           when: 'Only if the developer asks to test the other forms after the first response lands.',
           tests: installTests,
           presentation: installTestPresentation,
         } : null,
-        behavior: `Add the DEBUG-only one-time trigger so the real ${demoTest.label} form opens by itself on first launch: no checklist, no navigation. Build and launch. The developer answers once by voice or text; that single response is the install verification. Never submit it for them, and never include the trigger in release builds. The real subscription cancellation trigger still needs a sandbox check later; mention that once, briefly.`,
+        behavior: `Add the DEBUG-only one-time trigger so the real ${demoTest.label} form opens by itself on first launch: no checklist, no navigation. Build and launch. The developer answers once by voice or text; that single response is the install verification. To open any form again later, relaunch with a demo_commands entry (no button, nothing in release builds). Never submit it for them, and never include the trigger in release builds. The real subscription cancellation trigger still needs a sandbox check later; mention that once, briefly.`,
       } : null,
     },
     delivery: {
@@ -444,7 +467,7 @@ if !UserDefaults.standard.bool(forKey: paydirtFirstRunKey) {
       requiresSlackDelivery
         ? '6. After launch, call paydirt_slack_status. Once connected, call paydirt_list_slack_channels and propose routing in chat (cancellations to one channel and feature ideas to another, or both to the same channel). After the human confirms, save it with paydirt_set_slack_channels and verify with paydirt_slack_status. If Slack is still not connected, re-share auth_url and continue to step 7.'
         : '6. Slack: not chosen. Skip it.',
-      `7. First response: in one short line, ask the human to answer the form that just opened, by voice or text. Immediately call paydirt_wait_for_response with app_id ${appId} and since set to the launch time, then announce it in their words. If it times out, ask whether they submitted and call it again. That one response completes installation; offer the other forms' tests (install_verification.optional_full_check) only if they ask.`,
+      `7. First response: in one short line, ask the human to answer the form that just opened, by voice or text. Immediately call paydirt_wait_for_response with app_id ${appId} and since set to the launch time, then announce it in their words. If it times out, ask whether they submitted and call it again. That one response completes installation. To show any other form (trial, Suggest a Feature) or re-test, relaunch with the matching install_verification.demo_commands entry; if a physical iPhone is connected and the project has a signing team, offer the device command too.`,
       deliveryPreference === 'slack'
         ? '8. Daily brief: not included with Slack-only delivery. Do not offer it unless the developer enables coding-agent delivery.'
         : '8. Daily brief: offer the read-only daily 9:00 AM brief. If accepted, create it with the host\'s native scheduled-task capability and daily_brief.task_prompt; if scheduling is unavailable, provide the prompt and say so. This never blocks installation.',
